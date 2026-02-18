@@ -9,6 +9,9 @@ const SESSION_STORAGE_KEY = 'moe_session_id'
 function App() {
   const [message, setMessage] = useState('')
   const [reply, setReply] = useState('')
+  const [conversationHistory, setConversationHistory] = useState([])
+  const [reasoningUsed, setReasoningUsed] = useState(null)
+  const [showWhy, setShowWhy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionId, setSessionId] = useState(null)
@@ -45,7 +48,11 @@ function App() {
         setError(errMsg)
         return
       }
-      setReply(data.reply ?? '')
+      const assistantReply = data.reply ?? ''
+      setReply(assistantReply)
+      setReasoningUsed(data.reasoning_used ?? null)
+      setShowWhy(false)
+      setConversationHistory((prev) => [...prev, { role: 'user', content: text }, { role: 'assistant', content: assistantReply }])
       if (data.session_id) {
         setSessionId(data.session_id)
         localStorage.setItem(SESSION_STORAGE_KEY, data.session_id)
@@ -108,7 +115,11 @@ function App() {
         setError(errMsg)
         return
       }
-      setReply(data.reply ?? '')
+      const assistantReply = data.reply ?? ''
+      setReply(assistantReply)
+      setReasoningUsed(data.reasoning_used ?? null)
+      setShowWhy(false)
+      setConversationHistory((prev) => [...prev, { role: 'user', content: data.transcript ?? '(voice)' }, { role: 'assistant', content: assistantReply }])
       if (data.session_id) {
         setSessionId(data.session_id)
         localStorage.setItem(SESSION_STORAGE_KEY, data.session_id)
@@ -125,17 +136,76 @@ function App() {
     <div className="min-h-svh flex flex-col items-center justify-center p-4 bg-background">
       <div className="w-full max-w-2xl space-y-4">
         <h1 className="text-2xl font-semibold text-foreground">BMO</h1>
-        <Card>
+        <Card className="flex flex-col max-h-[60vh]">
           <CardHeader>
-            <CardTitle>Reply</CardTitle>
+            <CardTitle>Conversation</CardTitle>
           </CardHeader>
-          <CardContent className="min-h-[120px]">
-            {reply ? (
-              <p className="text-foreground whitespace-pre-wrap">{reply}</p>
-            ) : (
+          <CardContent className="flex-1 overflow-y-auto min-h-[160px] space-y-4">
+            {conversationHistory.length === 0 && !reply ? (
               <p className="text-muted-foreground">
                 {loading ? 'Thinking…' : 'Send a message to get a reply.'}
               </p>
+            ) : (
+              <>
+                {conversationHistory.map((entry, i) => (
+                  <div key={i} className={entry.role === 'user' ? 'text-right' : ''}>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      {entry.role === 'user' ? 'You' : 'BMO'}
+                    </p>
+                    <p className={`text-sm whitespace-pre-wrap ${entry.role === 'user' ? 'text-foreground' : 'text-foreground'}`}>
+                      {entry.content}
+                    </p>
+                  </div>
+                ))}
+                {loading && (
+                  <p className="text-muted-foreground text-sm">Thinking…</p>
+                )}
+                {reply && (
+                  <div className="pt-2">
+                    {reasoningUsed && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowWhy((v) => !v)}
+                          className="text-muted-foreground"
+                        >
+                          {showWhy ? 'Hide' : 'Why did you say that?'}
+                        </Button>
+                        {showWhy && (
+                          <div className="mt-2 p-3 rounded-md bg-muted text-sm space-y-2">
+                            {reasoningUsed.memories?.length > 0 && (
+                              <div>
+                                <p className="font-medium text-foreground">Memories used</p>
+                                <ul className="list-disc list-inside text-muted-foreground">
+                                  {(reasoningUsed.memories || []).map((m, i) => (
+                                    <li key={i}>{m.content}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {reasoningUsed.tool_calls?.length > 0 && (
+                              <div>
+                                <p className="font-medium text-foreground">Tools used</p>
+                                <ul className="list-disc list-inside text-muted-foreground">
+                                  {(reasoningUsed.tool_calls || []).map((t, i) => (
+                                    <li key={i}>
+                                      {t.name}({typeof t.arguments === 'object' ? JSON.stringify(t.arguments) : t.arguments})
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {(!reasoningUsed.memories?.length && !reasoningUsed.tool_calls?.length) && (
+                              <p className="text-muted-foreground">No memories or tools used for this reply.</p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

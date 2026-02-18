@@ -1,6 +1,11 @@
 """Stub tool implementations. Replace with real APIs in later phases."""
 
+import os
 from typing import Any
+
+from openai import OpenAI
+
+from memory import store_memory as memory_store, forget_memory as memory_forget, update_memory as memory_update
 
 
 def add_calendar_event(title: str, when: str, description: str = "") -> str:
@@ -22,6 +27,47 @@ def set_lights(action: str, **kwargs: Any) -> str:
     """Stub: control Philips Hue lights. Real impl in Phase 6."""
     opts = ", ".join(f"{k}={v}" for k, v in kwargs.items()) if kwargs else "none"
     return f"[STUB] Would set lights: action={action}, options=({opts})"
+
+
+def _memory_client() -> OpenAI | None:
+    key = os.getenv("OPENAI_API_KEY")
+    return OpenAI(api_key=key) if key else None
+
+
+def remember(content: str, source: str = "explicit") -> str:
+    """Store a memory (when user says 'remember X' or similar)."""
+    client = _memory_client()
+    if not client:
+        return "[ERROR] OPENAI_API_KEY not set; cannot store memory."
+    try:
+        memory_store(client, content, source)
+        return "I'll remember that."
+    except Exception as e:
+        return f"[ERROR] Failed to store memory: {e}"
+
+
+def forget_memory(description_or_id: str) -> str:
+    """Forget a memory (when user says 'forget that' or similar)."""
+    client = _memory_client()
+    if not client:
+        return "[ERROR] OPENAI_API_KEY not set; cannot forget memory."
+    try:
+        memory_forget(client, description_or_id)
+        return "I've forgotten that."
+    except Exception as e:
+        return f"[ERROR] Failed to forget: {e}"
+
+
+def update_memory(description_or_id: str, new_content: str) -> str:
+    """Update a memory (when user says 'actually, it's Y' or similar)."""
+    client = _memory_client()
+    if not client:
+        return "[ERROR] OPENAI_API_KEY not set; cannot update memory."
+    try:
+        memory_update(client, description_or_id, new_content)
+        return "I've updated that."
+    except Exception as e:
+        return f"[ERROR] Failed to update: {e}"
 
 
 # Map tool names (as used by the LLM) to functions and their JSON schema for OpenAI.
@@ -93,6 +139,59 @@ _TOOLS = {
                         "options": {"type": "object", "description": "Optional extra options"},
                     },
                     "required": ["action"],
+                },
+            },
+        },
+    },
+    "store_memory": {
+        "function": remember,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "store_memory",
+                "description": "Store something the user asked you to remember (e.g. 'remember that my name is X', 'don't forget I like Y').",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "The fact or content to remember"},
+                        "source": {"type": "string", "description": "Usually 'explicit' when user asked to remember"},
+                    },
+                    "required": ["content"],
+                },
+            },
+        },
+    },
+    "forget_memory": {
+        "function": forget_memory,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "forget_memory",
+                "description": "Forget a memory when the user says 'forget that', 'don't remember X', or similar.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description_or_id": {"type": "string", "description": "What to forget (description or memory id)"},
+                    },
+                    "required": ["description_or_id"],
+                },
+            },
+        },
+    },
+    "update_memory": {
+        "function": update_memory,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "update_memory",
+                "description": "Update a memory when the user corrects you (e.g. 'actually my name is Z', 'change that to Y').",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description_or_id": {"type": "string", "description": "Which memory to update (description or id)"},
+                        "new_content": {"type": "string", "description": "The corrected or new content"},
+                    },
+                    "required": ["description_or_id", "new_content"],
                 },
             },
         },

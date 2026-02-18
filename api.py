@@ -13,9 +13,15 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from main import SYSTEM_PROMPT, run_agent_turn
+from memory import init_db, get_relevant, format_context, extract_and_store_memories, store_memory
 from tools import get_tool_definitions
 
 load_dotenv()
+
+# Ensure memory DB exists at startup
+init_db()
+
+SESSION_SUMMARY_INTERVAL = 10  # Every N messages, store a session summary
 
 app = FastAPI(title="MOE API", description="Chat with BMO agent")
 
@@ -31,12 +37,43 @@ app.add_middleware(
 session_store: dict[str, list[dict]] = {}
 
 
-def get_memory_context(session_id: str, user_message: str) -> str:
+def _run_session_summary(client, messages: list[dict]) -> None:
+    """Summarize last 5–10 user/assistant pairs and store as one memory."""
+    pairs = []
+    for i, m in enumerate(messages):
+        if m.get("role") == "user" and m.get("content"):
+            pairs.append(("user", m["content"]))
+        elif m.get("role") == "assistant" and m.get("content"):
+            pairs.append(("assistant", m["content"]))
+    if len(pairs) < 2:
+        return
+    # Last 10 messages (5 exchanges) or fewer
+    recent = pairs[-10:] if len(pairs) >= 10 else pairs
+    block = "\n".join(f"{r}: {c[:200]}" for r, c in recent)
+    try:
+        r = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": f"Summarize this conversation in 1–2 sentences for future context.\n\n{block}"}
+            ],
+            max_tokens=150,
+        )
+        summary = (r.choices[0].message.content or "").strip()
+        if summary:
+            store_memory(client, summary, "summary")
+    except Exception:
+        pass
+
+
+def get_memory_context(client, session_id: str, user_message: str, top_k: int = 7):
     """
-    Placeholder for Phase 2 long-term memory. Returns empty string for now.
-    Inject retrieved context into the system prompt when this returns non-empty.
+    Retrieve relevant long-term memories for this message; return (context_string, used_entries).
+    used_entries: list of dicts with id, content, source for reasoning_used.
     """
-    return ""
+    entries = get_relevant(client, user_message, top_k=top_k)
+    context_str = format_context(entries)
+    used = [{"id": e.get("id"), "content": e.get("content", ""), "source": e.get("source", "")} for e in entries]
+    return context_str, used
 
 
 class ChatRequest(BaseModel):
@@ -47,12 +84,14 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: str
+    reasoning_used: dict | None = None
 
 
 class AudioResponse(BaseModel):
     reply: str
     session_id: str
     transcript: str | None = None
+    reasoning_used: dict | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -75,12 +114,12 @@ def chat(request: ChatRequest) -> ChatResponse:
     if not messages:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    # Inject memory context into system message (Phase 2 hook)
-    memory_context = get_memory_context(session_id, message)
-    if memory_context:
+    client = OpenAI(api_key=api_key)
+    context_str, used_entries = get_memory_context(client, session_id, message)
+    if context_str:
         messages[0] = {
             "role": "system",
-            "content": SYSTEM_PROMPT + "\n\n[Relevant memory]:\n" + memory_context,
+            "content": SYSTEM_PROMPT + "\n\n[Relevant memory]:\n" + context_str,
         }
     else:
         messages[0] = {"role": "system", "content": SYSTEM_PROMPT}
@@ -88,14 +127,23 @@ def chat(request: ChatRequest) -> ChatResponse:
     messages.append({"role": "user", "content": message})
 
     try:
-        client = OpenAI(api_key=api_key)
         tools = get_tool_definitions()
-        reply, updated_messages = run_agent_turn(client, messages, tools)
+        reply, updated_messages, tool_calls_made = run_agent_turn(client, messages, tools)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}") from e
 
     session_store[session_id] = updated_messages
-    return ChatResponse(reply=reply, session_id=session_id)
+    try:
+        extract_and_store_memories(client, message, reply)
+    except Exception:
+        pass
+    if len(updated_messages) >= 11 and (len(updated_messages) - 1) % SESSION_SUMMARY_INTERVAL == 0:
+        try:
+            _run_session_summary(client, updated_messages)
+        except Exception:
+            pass
+    reasoning = {"memories": used_entries, "tool_calls": tool_calls_made}
+    return ChatResponse(reply=reply, session_id=session_id, reasoning_used=reasoning)
 
 
 @app.post(
@@ -135,11 +183,11 @@ async def audio(
     if not messages:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    memory_context = get_memory_context(session_id, transcript)
-    if memory_context:
+    context_str, used_entries = get_memory_context(client, session_id, transcript)
+    if context_str:
         messages[0] = {
             "role": "system",
-            "content": SYSTEM_PROMPT + "\n\n[Relevant memory]:\n" + memory_context,
+            "content": SYSTEM_PROMPT + "\n\n[Relevant memory]:\n" + context_str,
         }
     else:
         messages[0] = {"role": "system", "content": SYSTEM_PROMPT}
@@ -148,9 +196,19 @@ async def audio(
 
     try:
         tools = get_tool_definitions()
-        reply, updated_messages = run_agent_turn(client, messages, tools)
+        reply, updated_messages, tool_calls_made = run_agent_turn(client, messages, tools)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}") from e
 
     session_store[session_id] = updated_messages
-    return AudioResponse(reply=reply, session_id=session_id, transcript=transcript)
+    try:
+        extract_and_store_memories(client, transcript, reply)
+    except Exception:
+        pass
+    if len(updated_messages) >= 11 and (len(updated_messages) - 1) % SESSION_SUMMARY_INTERVAL == 0:
+        try:
+            _run_session_summary(client, updated_messages)
+        except Exception:
+            pass
+    reasoning = {"memories": used_entries, "tool_calls": tool_calls_made}
+    return AudioResponse(reply=reply, session_id=session_id, transcript=transcript, reasoning_used=reasoning)
