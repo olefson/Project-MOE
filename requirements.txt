@@ -2,3 +2,7 @@ openai
 python-dotenv
 fastapi
 uvicorn[standard]
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+python-dateutil
