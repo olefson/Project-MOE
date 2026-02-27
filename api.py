@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from main import SYSTEM_PROMPT, run_agent_turn
+from main import SYSTEM_PROMPT, get_current_time_context, run_agent_turn
 from memory import init_db, get_relevant, format_context, extract_and_store_memories, store_memory
 from tools import get_tool_definitions
 
@@ -110,19 +110,20 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     # Load or create conversation
+    time_block = get_current_time_context()
     messages = session_store.get(session_id)
     if not messages:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + time_block}]
 
     client = OpenAI(api_key=api_key)
     context_str, used_entries = get_memory_context(client, session_id, message)
     if context_str:
         messages[0] = {
             "role": "system",
-            "content": SYSTEM_PROMPT + "\n\n[Relevant memory]:\n" + context_str,
+            "content": SYSTEM_PROMPT + "\n\n" + time_block + "\n\n[Relevant memory]:\n" + context_str,
         }
     else:
-        messages[0] = {"role": "system", "content": SYSTEM_PROMPT}
+        messages[0] = {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + time_block}
 
     messages.append({"role": "user", "content": message})
 
@@ -179,18 +180,19 @@ async def audio(
         raise HTTPException(status_code=400, detail="No speech detected in audio")
 
     # Same session/agent flow as /chat
+    time_block = get_current_time_context()
     messages = session_store.get(session_id)
     if not messages:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + time_block}]
 
     context_str, used_entries = get_memory_context(client, session_id, transcript)
     if context_str:
         messages[0] = {
             "role": "system",
-            "content": SYSTEM_PROMPT + "\n\n[Relevant memory]:\n" + context_str,
+            "content": SYSTEM_PROMPT + "\n\n" + time_block + "\n\n[Relevant memory]:\n" + context_str,
         }
     else:
-        messages[0] = {"role": "system", "content": SYSTEM_PROMPT}
+        messages[0] = {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + time_block}
 
     messages.append({"role": "user", "content": transcript})
 

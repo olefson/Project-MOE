@@ -14,6 +14,7 @@ DEFAULT_CREDENTIALS = ROOT / "credentials.json"
 DEFAULT_TOKEN = ROOT / "token.json"
 
 # Scopes matching your Data Access setup (Calendar, Drive, Docs, Sheets, Gmail)
+# Include openid so returned scope matches (Google adds it when using userinfo.email)
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",  # calendars + events
     "https://www.googleapis.com/auth/drive.file",
@@ -21,6 +22,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/userinfo.email",
+    "openid",
 ]
 
 
