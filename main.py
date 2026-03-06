@@ -13,6 +13,7 @@ from openai import OpenAI
 
 from memory import init_db, get_relevant, format_context, extract_and_store_memories
 from tools import get_tool_definitions, run_tool
+from tts import speak as tts_speak, is_available as tts_available
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 init_db()
@@ -78,7 +79,11 @@ def main() -> None:
     tools = get_tool_definitions()
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    print("BMO (Phase 0 skeleton). Say something! Type 'quit' to exit.\n")
+    tts_ok = tts_available()
+    print("BMO (Phase 0 skeleton). Say something! Type 'quit' to exit.")
+    if not tts_ok:
+        print("(TTS: run 'python scripts/download_piper_voice.py' to enable voice.)")
+    print()
 
     while True:
         try:
@@ -109,6 +114,12 @@ def main() -> None:
         except Exception:
             pass
         print(f"BMO: {reply}\n")
+        # Piper TTS (voice: cori [high]). Set BMO_TTS=0 to disable.
+        if reply and os.getenv("BMO_TTS", "1").strip().lower() not in ("0", "false", "no"):
+            try:
+                tts_speak(reply)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
