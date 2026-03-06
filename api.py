@@ -5,6 +5,7 @@ Run: uvicorn api:app --reload --port 8000
 import io
 import os
 import uuid
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -16,7 +17,7 @@ from main import SYSTEM_PROMPT, get_current_time_context, run_agent_turn
 from memory import init_db, get_relevant, format_context, extract_and_store_memories, store_memory
 from tools import get_tool_definitions
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # Ensure memory DB exists at startup
 init_db()

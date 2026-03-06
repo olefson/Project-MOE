@@ -11,6 +11,12 @@ from tools.calendar import create_event as calendar_create_event
 from tools.gmail import list_emails as gmail_list_emails, get_email as gmail_get_email, send_email as gmail_send_email
 from tools.docs import list_docs as docs_list_docs, get_doc_content as docs_get_doc_content, create_doc as docs_create_doc
 from tools.sheets import list_sheets as sheets_list_sheets, get_sheet_data as sheets_get_sheet_data
+from tools.hue import (
+    set_lights as hue_set_lights,
+    list_lights as hue_list_lights,
+    list_rooms as hue_list_rooms,
+    list_scenes as hue_list_scenes,
+)
 
 
 def add_calendar_event(title: str, when: str, description: str = "") -> str:
@@ -68,10 +74,38 @@ def send_notification(message: str) -> str:
     return f"[STUB] Would send notification: “{message}”."
 
 
-def set_lights(action: str, **kwargs: Any) -> str:
-    """Stub: control Philips Hue lights. Real impl in Phase 6."""
-    opts = ", ".join(f"{k}={v}" for k, v in kwargs.items()) if kwargs else "none"
-    return f"[STUB] Would set lights: action={action}, options=({opts})"
+def set_lights(
+    action: str,
+    room_name: str | None = None,
+    scene_name: str | None = None,
+    color: str | None = None,
+    brightness: float | None = None,
+    **kwargs: Any,
+) -> str:
+    """Control Philips Hue lights: on/off, color, or scene (e.g. cozy, bright)."""
+    return hue_set_lights(
+        action=action,
+        room_name=room_name,
+        scene_name=scene_name,
+        color=color,
+        brightness=brightness,
+        **kwargs,
+    )
+
+
+def list_lights() -> str:
+    """List Philips Hue lights (name and id). Use before controlling a specific light."""
+    return hue_list_lights()
+
+
+def list_rooms() -> str:
+    """List Philips Hue rooms. Use to target a room by name when controlling lights."""
+    return hue_list_rooms()
+
+
+def list_scenes() -> str:
+    """List Philips Hue scenes (e.g. Cozy, Bright). Use to activate a scene by name."""
+    return hue_list_scenes()
 
 
 def _memory_client() -> OpenAI | None:
@@ -176,15 +210,51 @@ _TOOLS = {
             "type": "function",
             "function": {
                 "name": "set_lights",
-                "description": "Control Philips Hue lights (on/off, color, scene).",
+                "description": "Control Philips Hue lights: on/off, set color, or activate a scene (e.g. cozy, bright). Use list_rooms or list_scenes to discover names.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string", "description": "e.g. on, off, color, scene, cozy, bright"},
-                        "options": {"type": "object", "description": "Optional extra options"},
+                        "action": {"type": "string", "description": "on, off, color, scene, or a mood like cozy, bright, relax, focus"},
+                        "room_name": {"type": "string", "description": "Optional room name (e.g. Living room) to target"},
+                        "scene_name": {"type": "string", "description": "For action=scene: scene name (e.g. Cozy, Bright)"},
+                        "color": {"type": "string", "description": "For on/color: red, blue, green, warm, white, purple, etc."},
+                        "brightness": {"type": "number", "description": "Optional brightness 0-100"},
                     },
                     "required": ["action"],
                 },
+            },
+        },
+    },
+    "list_lights": {
+        "function": list_lights,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "list_lights",
+                "description": "List all Philips Hue lights (name and id). Use to see what lights are available.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    },
+    "list_rooms": {
+        "function": list_rooms,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "list_rooms",
+                "description": "List Philips Hue rooms. Use to target a room by name when controlling lights.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    },
+    "list_scenes": {
+        "function": list_scenes,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "list_scenes",
+                "description": "List Philips Hue scenes (e.g. Cozy, Bright). Use to activate a scene by name with set_lights.",
+                "parameters": {"type": "object", "properties": {}},
             },
         },
     },
@@ -399,9 +469,13 @@ def run_tool(name: str, arguments: dict) -> str:
     fn = _TOOLS[name]["function"]
     try:
         if name == "set_lights":
-            action = arguments.get("action", "")
-            opts = arguments.get("options") or {}
-            return fn(action=action, **opts)
+            return fn(
+                action=arguments.get("action", ""),
+                room_name=arguments.get("room_name"),
+                scene_name=arguments.get("scene_name"),
+                color=arguments.get("color"),
+                brightness=arguments.get("brightness"),
+            )
         # Pass only arguments the stub expects; ignore extra keys from the LLM.
         return fn(**{k: v for k, v in arguments.items() if k in _TOOLS[name]["definition"]["function"]["parameters"].get("properties", {})})
     except TypeError as e:

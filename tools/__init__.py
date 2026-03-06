@@ -5,6 +5,9 @@ from .stubs import (
     web_search,
     send_notification,
     set_lights,
+    list_lights,
+    list_rooms,
+    list_scenes,
     get_tool_definitions,
     run_tool,
 )
@@ -14,6 +17,9 @@ __all__ = [
     "web_search",
     "send_notification",
     "set_lights",
+    "list_lights",
+    "list_rooms",
+    "list_scenes",
     "get_tool_definitions",
     "run_tool",
 ]
