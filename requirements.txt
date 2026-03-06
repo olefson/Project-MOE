@@ -8,3 +8,6 @@ google-api-python-client
 python-dateutil
 piper-tts
 pygame
+pyaudio
+webrtcvad
+pvporcupine

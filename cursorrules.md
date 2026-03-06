@@ -1,4 +1,4 @@
-# Cursor rules – BMO Agentic AI Project
+# Cursor rules – PMO Agentic AI Project
 
 ## Environment and secrets
 
@@ -12,7 +12,7 @@
 
 ## Project context
 
-- This is the **BMO Agentic AI** project (CIS 6930 – Introduction to Agentic AI). Goal: a voice-based, personality-driven agent that can reason, remember, and act using external tools.
+- This is the **PMO Agentic AI** project (CIS 6930 – Introduction to Agentic AI). Goal: a voice-based, personality-driven agent that can reason, remember, and act using external tools.
 - Follow the **phased plan** in `project_plan.md`: Phase 0 (setup/skeleton) → Phase 1 (voice) → Phase 2 (memory) → Phase 3+ (calendar, search, Telegram, Hue). Prefer implementing in that order unless the user asks otherwise.
 - **Agent loop:** Input → Reason → Tool → Memory → Output. New features should plug into this pipeline; avoid one-off scripts that bypass it.
 - **No model training.** Use API-based LLMs, STT, TTS, and external APIs only.
@@ -48,7 +48,7 @@
 ## Documentation and prompts
 
 - **README.md** should explain how to set up the venv, install deps, and run the agent. Keep it in sync with actual commands and project structure.
-- **BMO persona:** When editing system prompts or agent behavior, keep BMO’s tone playful, helpful, and story-aware (Finn & Jake, Adventure Time). Avoid generic assistant voice.
+- **PMO persona:** When editing system prompts or agent behavior, keep PMO’s tone playful, helpful, and story-aware (Finn & Jake, Adventure Time). Avoid generic assistant voice.
 - **Comments:** Prefer clear names and short docstrings over long inline comments. Comment “why” for non-obvious logic (e.g. workarounds, API quirks).
 
 ---

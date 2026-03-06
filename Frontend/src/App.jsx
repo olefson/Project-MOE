@@ -135,7 +135,7 @@ function App() {
   return (
     <div className="min-h-svh flex flex-col items-center justify-center p-4 bg-background">
       <div className="w-full max-w-2xl space-y-4">
-        <h1 className="text-2xl font-semibold text-foreground">BMO</h1>
+        <h1 className="text-2xl font-semibold text-foreground">PMO</h1>
         <Card className="flex flex-col max-h-[60vh]">
           <CardHeader>
             <CardTitle>Conversation</CardTitle>
@@ -150,7 +150,7 @@ function App() {
                 {conversationHistory.map((entry, i) => (
                   <div key={i} className={entry.role === 'user' ? 'text-right' : ''}>
                     <p className="text-xs font-medium text-muted-foreground mb-1">
-                      {entry.role === 'user' ? 'You' : 'BMO'}
+                      {entry.role === 'user' ? 'You' : 'PMO'}
                     </p>
                     <p className={`text-sm whitespace-pre-wrap ${entry.role === 'user' ? 'text-foreground' : 'text-foreground'}`}>
                       {entry.content}

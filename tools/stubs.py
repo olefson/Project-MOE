@@ -17,6 +17,14 @@ from tools.hue import (
     list_rooms as hue_list_rooms,
     list_scenes as hue_list_scenes,
 )
+from tools.pi_control import (
+    get_volume as pi_get_volume,
+    set_volume as pi_set_volume,
+    volume_up as pi_volume_up,
+    volume_down as pi_volume_down,
+    set_mute as pi_set_mute,
+    reboot_pi as pi_reboot_pi,
+)
 
 
 def add_calendar_event(title: str, when: str, description: str = "") -> str:
@@ -106,6 +114,36 @@ def list_rooms() -> str:
 def list_scenes() -> str:
     """List Philips Hue scenes (e.g. Cozy, Bright). Use to activate a scene by name."""
     return hue_list_scenes()
+
+
+def get_volume() -> str:
+    """Get current system volume (0-100%). Only on Raspberry Pi (Linux)."""
+    return pi_get_volume()
+
+
+def set_volume(level: int) -> str:
+    """Set system volume to 0-100%. Only on Raspberry Pi (Linux)."""
+    return pi_set_volume(level=level)
+
+
+def volume_up(step: int = 10) -> str:
+    """Increase system volume. Only on Raspberry Pi (Linux)."""
+    return pi_volume_up(step=step)
+
+
+def volume_down(step: int = 10) -> str:
+    """Decrease system volume. Only on Raspberry Pi (Linux)."""
+    return pi_volume_down(step=step)
+
+
+def set_mute(muted: bool) -> str:
+    """Mute or unmute system audio. Only on Raspberry Pi (Linux)."""
+    return pi_set_mute(muted=muted)
+
+
+def reboot_pi(confirm: bool) -> str:
+    """Reboot the Raspberry Pi. Only when user explicitly confirms and PMO_ALLOW_REBOOT=1."""
+    return pi_reboot_pi(confirm=confirm)
 
 
 def _memory_client() -> OpenAI | None:
@@ -255,6 +293,102 @@ _TOOLS = {
                 "name": "list_scenes",
                 "description": "List Philips Hue scenes (e.g. Cozy, Bright). Use to activate a scene by name with set_lights.",
                 "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    },
+    "get_volume": {
+        "function": get_volume,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "get_volume",
+                "description": "Get current system volume (0-100%). Use when user asks 'what's the volume?' or 'how loud?'. Only works on Raspberry Pi.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    },
+    "set_volume": {
+        "function": set_volume,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "set_volume",
+                "description": "Set system volume to a percentage (0-100). Use when user says 'set volume to X' or 'volume at 50%'. Only works on Raspberry Pi.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "level": {"type": "integer", "description": "Volume level 0-100"},
+                    },
+                    "required": ["level"],
+                },
+            },
+        },
+    },
+    "volume_up": {
+        "function": volume_up,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "volume_up",
+                "description": "Increase system volume. Use when user says 'volume up' or 'turn it up'. Only works on Raspberry Pi.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "step": {"type": "integer", "description": "How much to increase (default 10)"},
+                    },
+                    "required": [],
+                },
+            },
+        },
+    },
+    "volume_down": {
+        "function": volume_down,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "volume_down",
+                "description": "Decrease system volume. Use when user says 'volume down' or 'turn it down'. Only works on Raspberry Pi.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "step": {"type": "integer", "description": "How much to decrease (default 10)"},
+                    },
+                    "required": [],
+                },
+            },
+        },
+    },
+    "set_mute": {
+        "function": set_mute,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "set_mute",
+                "description": "Mute or unmute system audio. Use when user says 'mute' or 'unmute'. Only works on Raspberry Pi.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "muted": {"type": "boolean", "description": "True to mute, false to unmute"},
+                    },
+                    "required": ["muted"],
+                },
+            },
+        },
+    },
+    "reboot_pi": {
+        "function": reboot_pi,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "reboot_pi",
+                "description": "Reboot the Raspberry Pi. Only call when the user has explicitly confirmed (e.g. 'yes, reboot'). Requires PMO_ALLOW_REBOOT=1 in .env.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "confirm": {"type": "boolean", "description": "True only when user explicitly confirmed reboot"},
+                    },
+                    "required": ["confirm"],
+                },
             },
         },
     },

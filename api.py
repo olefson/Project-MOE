@@ -1,5 +1,5 @@
 """
-MOE/BMO HTTP API – session-aware chat endpoint + voice (Whisper).
+MOE/PMO HTTP API – session-aware chat endpoint + voice (Whisper).
 Run: uvicorn api:app --reload --port 8000
 """
 import io
@@ -24,7 +24,7 @@ init_db()
 
 SESSION_SUMMARY_INTERVAL = 10  # Every N messages, store a session summary
 
-app = FastAPI(title="MOE API", description="Chat with BMO agent")
+app = FastAPI(title="MOE API", description="Chat with PMO agent")
 
 app.add_middleware(
     CORSMiddleware,

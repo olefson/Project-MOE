@@ -22,7 +22,7 @@ def list_files(
 ) -> str:
     """
     List files from Drive. Optionally filter by mime_type (e.g. Google Docs, Google Sheets).
-    Returns id, name, and link so BMO can reference them or pass id to get_doc_content/get_sheet_data.
+    Returns id, name, and link so PMO can reference them or pass id to get_doc_content/get_sheet_data.
     """
     service = _get_drive_service()
     if not service:

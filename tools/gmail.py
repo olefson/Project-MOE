@@ -1,5 +1,5 @@
 """
-Gmail API: list, read, and send email. For voice: BMO can read emails and summarize.
+Gmail API: list, read, and send email. For voice: PMO can read emails and summarize.
 """
 import base64
 import re
@@ -60,7 +60,7 @@ def _get_header(headers: list[dict], name: str) -> str:
 
 def list_emails(max_results: int = 10, query: str = "") -> str:
     """
-    List recent emails. Returns a summary (subject, from, date, snippet) so BMO can read/summarize.
+    List recent emails. Returns a summary (subject, from, date, snippet) so PMO can read/summarize.
     query: optional Gmail search (e.g. "is:unread", "from:someone@example.com").
     """
     service = _get_gmail_service()
@@ -96,7 +96,7 @@ def list_emails(max_results: int = 10, query: str = "") -> str:
 def get_email(message_id: str) -> str:
     """
     Get full content of one email by message ID. Returns subject, from, date, and body
-    so BMO can read and summarize for the user (e.g. on a voice assistant).
+    so PMO can read and summarize for the user (e.g. on a voice assistant).
     """
     service = _get_gmail_service()
     if not service:

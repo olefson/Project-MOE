@@ -1,5 +1,5 @@
 """
-Google Docs API: list, read, and create documents. For voice: BMO can read docs and summarize.
+Google Docs API: list, read, and create documents. For voice: PMO can read docs and summarize.
 """
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -44,7 +44,7 @@ def _extract_text_from_doc(doc: dict) -> str:
 
 
 def list_docs(max_results: int = 10, query: str = "") -> str:
-    """List recent Google Docs. Returns id, name, and link so BMO can reference them."""
+    """List recent Google Docs. Returns id, name, and link so PMO can reference them."""
     return list_files(
         mime_type=DOCS_MIME,
         max_results=max_results,
@@ -55,7 +55,7 @@ def list_docs(max_results: int = 10, query: str = "") -> str:
 
 def get_doc_content(doc_id: str) -> str:
     """
-    Get full text content of a Google Doc. Returns the document body so BMO can read and summarize
+    Get full text content of a Google Doc. Returns the document body so PMO can read and summarize
     for the user (e.g. on a voice assistant).
     """
     service = _get_docs_service()
