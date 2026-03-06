@@ -14,13 +14,14 @@ from openai import OpenAI
 from memory import init_db, get_relevant, format_context, extract_and_store_memories
 from tools import get_tool_definitions, run_tool
 from tts import speak as tts_speak, is_available as tts_available
+from face import start_face as face_start, record_interaction as face_record_interaction, show_error as face_show_error
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 init_db()
 
 SYSTEM_PROMPT = """You are BMO, a friendly AI from the world of Adventure Time. You're playful, helpful, and a little bit silly. You have access to tools: calendar (add events), Gmail (list_emails, get_email, send_email), Google Docs (list_docs, get_doc_content, create_doc), Google Sheets (list_sheets, get_sheet_data), web search, notifications, Philips Hue lights, and memory.
 
-When the user says to remember something (e.g. "remember that my name is X", "don't forget I like LoL"), use store_memory to save it. When they say to forget (e.g. "forget that", "don't remember X"), use forget_memory. When they correct you (e.g. "actually my name is Z"), use update_memory. You can add calendar events, read and send Gmail (list_emails, get_email, send_email), read and create Google Docs (list_docs, get_doc_content, create_doc), and read Google Sheets (list_sheets, get_sheet_data). When the user asks to read emails or summarize a doc/sheet, use the list tool first to find ids, then get_email/get_doc_content/get_sheet_data to fetch content, then summarize in your reply (e.g. for a voice assistant). For Philips Hue: use list_rooms to see room names, list_lights to see lights, list_scenes to see scenes; use set_lights with action on/off/color/scene and optional room_name (e.g. "Secondary Bathroom", "Living room") to control lights. Web search and notifications are stubs for now. Stay in character. Keep replies concise unless the user wants a story."""
+When the user says to remember something (e.g. "remember that my name is X", "don't forget I like LoL"), use store_memory to save it. When they say to forget (e.g. "forget that", "don't remember X"), use forget_memory. When they correct you (e.g. "actually my name is Z"), use update_memory. You can add calendar events, read and send Gmail (list_emails, get_email, send_email), read and create Google Docs (list_docs, get_doc_content, create_doc), and read Google Sheets (list_sheets, get_sheet_data). When the user asks to read emails or summarize a doc/sheet, use the list tool first to find ids, then get_email/get_doc_content/get_sheet_data to fetch content, then summarize in your reply (e.g. for a voice assistant). For Philips Hue: use list_rooms to see room names, list_lights to see lights, list_scenes to see scenes; use set_lights with action on/off/color/scene and optional room_name (e.g. "Secondary Bathroom", "Living room") to control lights. Web search and notifications are stubs for now. Stay in character. Keep replies concise unless the user wants a story. Do not use emojis—your replies are spoken by text-to-speech and emojis get read aloud."""
 
 
 def get_current_time_context() -> str:
@@ -80,9 +81,14 @@ def main() -> None:
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     tts_ok = tts_available()
+    show_face = os.getenv("BMO_FACE", "0").strip().lower() in ("1", "true", "yes")
+    if show_face:
+        face_start()
     print("BMO (Phase 0 skeleton). Say something! Type 'quit' to exit.")
     if not tts_ok:
         print("(TTS: run 'python scripts/download_piper_voice.py' to enable voice.)")
+    if show_face:
+        print("(Face window: 800x480)")
     print()
 
     while True:
@@ -98,6 +104,7 @@ def main() -> None:
             break
 
         messages.append({"role": "user", "content": user_input})
+        face_record_interaction()
 
         # Inject current time and relevant long-term memory into system message
         time_block = get_current_time_context()
@@ -108,18 +115,24 @@ def main() -> None:
         else:
             messages[0] = {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + time_block}
 
-        reply, messages, _ = run_agent_turn(client, messages, tools)
+        try:
+            reply, messages, _ = run_agent_turn(client, messages, tools)
+        except Exception as e:
+            face_show_error()
+            print(f"BMO: Oops, something went wrong: {e}\n")
+            continue
         try:
             extract_and_store_memories(client, user_input, reply)
         except Exception:
             pass
         print(f"BMO: {reply}\n")
+        face_record_interaction()
         # Piper TTS (voice: cori [high]). Set BMO_TTS=0 to disable.
         if reply and os.getenv("BMO_TTS", "1").strip().lower() not in ("0", "false", "no"):
             try:
                 tts_speak(reply)
             except Exception:
-                pass
+                face_show_error()
 
 
 if __name__ == "__main__":
