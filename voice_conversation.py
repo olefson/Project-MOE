@@ -15,8 +15,12 @@ import wave
 from voice_input import (
     FRAME_BYTES,
     FRAME_MS,
+    FRAME_SAMPLES_48K,
+    get_mic_sample_rate,
+    HW_RATE_48K,
     SAMPLE_RATE,
     _input_device_index,
+    _resample_to_16k,
     _rms_16bit,
 )
 from wake_word import _get_keyword_path, WAKE_KEYWORD
@@ -85,17 +89,26 @@ def open_conversation(access_key: str) -> "ConversationSession | None":
     except Exception as e:
         print(f"[Voice] Porcupine init failed: {e}", file=sys.stderr, flush=True)
         return None
-    sample_rate = porcupine.sample_rate
+    sample_rate = porcupine.sample_rate  # 16000 for Porcupine
     frame_length = porcupine.frame_length  # 512 samples
+
+    hw_rate = get_mic_sample_rate()
+    if hw_rate != SAMPLE_RATE:
+        # Record at 48k and resample to 16k for Porcupine/Whisper (e.g. Pi USB mics)
+        rate = hw_rate
+        frames_per_buffer = FRAME_SAMPLES_48K  # 1920 = 40 ms at 48k
+    else:
+        rate = sample_rate
+        frames_per_buffer = FRAME_BYTES  # 640 frames = 40 ms at 16k
 
     pa = pyaudio.PyAudio()
     device_index = _input_device_index()
     open_kw = {
         "format": pyaudio.paInt16,
         "channels": 1,
-        "rate": sample_rate,
+        "rate": rate,
         "input": True,
-        "frames_per_buffer": FRAME_BYTES,
+        "frames_per_buffer": frames_per_buffer,
     }
     if device_index is not None:
         open_kw["input_device_index"] = device_index
@@ -113,19 +126,21 @@ def open_conversation(access_key: str) -> "ConversationSession | None":
         porcupine=porcupine,
         frame_length=frame_length,
         wake_done=False,
+        hw_sample_rate=hw_rate,
     )
 
 
 class ConversationSession:
     """Holds the open mic stream and wake-word state. Opaque to caller."""
-    __slots__ = ("stream", "pa", "porcupine", "frame_length", "wake_done")
+    __slots__ = ("stream", "pa", "porcupine", "frame_length", "wake_done", "hw_sample_rate")
 
-    def __init__(self, stream, pa, porcupine, frame_length: int, wake_done: bool):
+    def __init__(self, stream, pa, porcupine, frame_length: int, wake_done: bool, hw_sample_rate: int = 16000):
         self.stream = stream
         self.pa = pa
         self.porcupine = porcupine
         self.frame_length = frame_length
         self.wake_done = wake_done
+        self.hw_sample_rate = hw_sample_rate
 
 
 def get_next_utterance(session: "ConversationSession") -> str | None:
@@ -142,7 +157,8 @@ def get_next_utterance(session: "ConversationSession") -> str | None:
     stream = session.stream
     porcupine = session.porcupine
     frame_length = session.frame_length
-    # PyAudio read(num_frames) returns num_frames samples; we use FRAME_BYTES as num_frames so we get 640 samples = 1280 bytes per read. Porcupine needs 512 samples per process().
+    # PyAudio read(num_frames): at 16k we read 640 frames (1280 B); at 48k we read 1920 frames (3840 B) then resample to 1280 B.
+    read_frames = FRAME_SAMPLES_48K if session.hw_sample_rate == HW_RATE_48K else FRAME_BYTES
     porcupine_buffer: list[int] = []
 
     buffer: list[bytes] = []
@@ -156,10 +172,13 @@ def get_next_utterance(session: "ConversationSession") -> str | None:
     try:
         while True:
             try:
-                chunk = stream.read(FRAME_BYTES, exception_on_overflow=False)
+                chunk = stream.read(read_frames, exception_on_overflow=False)
             except Exception:
                 break
-            if len(chunk) < FRAME_BYTES:
+            if session.hw_sample_rate == HW_RATE_48K:
+                chunk = _resample_to_16k(chunk, session.hw_sample_rate)
+            expected_bytes = 1280  # 40 ms at 16k
+            if len(chunk) < expected_bytes:
                 break
             total_ms += (len(chunk) // 2) * 1000 // SAMPLE_RATE
 

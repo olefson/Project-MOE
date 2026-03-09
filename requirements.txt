@@ -11,3 +11,4 @@ pygame
 pyaudio
 webrtcvad
 pvporcupine
+scipy
