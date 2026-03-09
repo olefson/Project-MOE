@@ -2,17 +2,28 @@
 Always-on mic with Voice Activity Detection (VAD).
 Records until the user stops speaking (silence after speech), then returns a WAV file path for Whisper.
 For Pi / no-keyboard mode: set PMO_VOICE_ONLY=1 and run main.py; speak, then pause to submit.
+On Windows, if webrtcvad is not available we fall back to a simple energy-based detector.
 """
 import os
+import struct
 import tempfile
 import wave
 
 try:
     import pyaudio
-    import webrtcvad
-    _DEPS_AVAILABLE = True
+    _HAVE_PYAUDIO = True
 except ImportError:
-    _DEPS_AVAILABLE = False
+    pyaudio = None  # type: ignore[assignment]
+    _HAVE_PYAUDIO = False
+
+try:
+    import webrtcvad
+    _HAVE_WEBRTCVAD = True
+except ImportError:
+    webrtcvad = None  # type: ignore[assignment]
+    _HAVE_WEBRTCVAD = False
+
+_DEPS_AVAILABLE = _HAVE_PYAUDIO
 
 SAMPLE_RATE = 16000
 # webrtcvad expects 10, 20, or 30 ms frames at 8/16/32 kHz
@@ -20,8 +31,28 @@ FRAME_MS = 20
 FRAME_BYTES = int(SAMPLE_RATE * FRAME_MS / 1000 * 2)  # 16-bit = 2 bytes per sample
 
 
+def _rms_16bit(chunk: bytes) -> float:
+    """RMS of 16-bit little-endian PCM (no audioop dependency; audioop removed in Python 3.13)."""
+    n = len(chunk) // 2
+    if n == 0:
+        return 0.0
+    samples = struct.unpack_from(f"<{n}h", chunk)
+    return (sum(s * s for s in samples) / n) ** 0.5
+
+
+def _input_device_index() -> int | None:
+    """Optional mic device index from PMO_MIC_DEVICE_INDEX (e.g. for Pi USB mic)."""
+    s = os.getenv("PMO_MIC_DEVICE_INDEX", "").strip()
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
 def is_available() -> bool:
-    """True if pyaudio and webrtcvad are installed and mic can be used."""
+    """True if PyAudio is installed and the mic can be used (VAD may fall back to energy-based on some platforms)."""
     if not _DEPS_AVAILABLE:
         return False
     try:
@@ -38,23 +69,29 @@ def record_until_silence(
     min_utterance_ms: int = 400,
     max_duration_ms: int = 15000,
     vad_aggressiveness: int = 2,
+    initial_audio: bytes = b"",
 ) -> str | None:
     """
     Listen to the microphone until the user stops speaking (silence for silence_duration_ms).
+    If initial_audio is provided (e.g. tail from wake word), it is prepended so the full sentence is captured.
     Returns path to a temp WAV file (16 kHz mono 16-bit) ready for Whisper, or None if nothing recorded.
     """
     if not _DEPS_AVAILABLE:
         return None
-    vad = webrtcvad.Vad(vad_aggressiveness)
+    vad = webrtcvad.Vad(vad_aggressiveness) if _HAVE_WEBRTCVAD else None
     pa = pyaudio.PyAudio()
+    device_index = _input_device_index()
+    open_kw: dict = {
+        "format": pyaudio.paInt16,
+        "channels": 1,
+        "rate": SAMPLE_RATE,
+        "input": True,
+        "frames_per_buffer": FRAME_BYTES,
+    }
+    if device_index is not None:
+        open_kw["input_device_index"] = device_index
     try:
-        stream = pa.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=SAMPLE_RATE,
-            input=True,
-            frames_per_buffer=FRAME_BYTES,
-        )
+        stream = pa.open(**open_kw)
     except Exception:
         pa.terminate()
         return None
@@ -69,6 +106,18 @@ def record_until_silence(
     silence_frames_needed = silence_duration_ms // FRAME_MS
     frames_in_buffer = 0
 
+    # Prepend wake-word tail so "bumblebee, how's the weather" is fully captured.
+    # When we have tail, we're already mid-utterance: go straight to "speaking" and capture until silence.
+    if initial_audio:
+        n = len(initial_audio) // FRAME_BYTES
+        for i in range(n):
+            chunk = initial_audio[i * FRAME_BYTES : (i + 1) * FRAME_BYTES]
+            buffer.append(chunk)
+            frames_in_buffer += 1
+            total_ms += FRAME_MS
+        state = "speaking"
+        silence_ms = 0
+
     try:
         while True:
             try:
@@ -81,7 +130,13 @@ def record_until_silence(
 
             if len(chunk) < FRAME_BYTES:
                 break
-            is_speech = vad.is_speech(chunk, SAMPLE_RATE)
+            if _HAVE_WEBRTCVAD:
+                is_speech = vad.is_speech(chunk, SAMPLE_RATE)  # type: ignore[union-attr]
+            else:
+                # Simple RMS-based detector when webrtcvad is unavailable (e.g., Windows without build tools).
+                rms = _rms_16bit(chunk)
+                # Empirical threshold: treat as speech if above low noise floor.
+                is_speech = rms > 400
 
             if state == "waiting":
                 if is_speech:
@@ -109,7 +164,8 @@ def record_until_silence(
     finally:
         pa.terminate()
 
-    if state != "speaking" or frames_in_buffer < min_speech_frames:
+    min_frames = min_speech_frames if not initial_audio else 1
+    if state != "speaking" or frames_in_buffer < min_frames:
         return None
 
     # Write WAV to temp file

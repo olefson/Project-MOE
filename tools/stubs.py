@@ -25,6 +25,7 @@ from tools.pi_control import (
     set_mute as pi_set_mute,
     reboot_pi as pi_reboot_pi,
 )
+from tools.weather import get_weather as weather_get_weather
 
 
 def add_calendar_event(title: str, when: str, description: str = "") -> str:
@@ -75,6 +76,11 @@ def get_sheet_data(spreadsheet_id: str, range_notation: str = "") -> str:
 def web_search(query: str) -> str:
     """Stub: search the web. Real impl in Phase 4 (SerpAPI)."""
     return f"[STUB] Would search for: “{query}”. No real results yet."
+
+
+def get_weather(location: str = "") -> str:
+    """Get current weather. Use empty location for default (or set PMO_LAT, PMO_LON, PMO_WEATHER_LOCATION in .env), or a city name (e.g. London, Berlin)."""
+    return weather_get_weather(location=location or "")
 
 
 def send_notification(message: str) -> str:
@@ -221,6 +227,23 @@ _TOOLS = {
                         "query": {"type": "string", "description": "Search query"},
                     },
                     "required": ["query"],
+                },
+            },
+        },
+    },
+    "get_weather": {
+        "function": get_weather,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current weather. Use when the user asks about weather, temperature, or conditions. Optional: city/location name (e.g. London, Berlin); leave empty for default location (set PMO_LAT, PMO_LON, PMO_WEATHER_LOCATION in .env).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "City or place name (e.g. Seattle, Paris), or empty for default location"},
+                    },
+                    "required": [],
                 },
             },
         },

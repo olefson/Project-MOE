@@ -1,10 +1,12 @@
 """
 Pygame face – cute character; mouth syncs to TTS, idle animations, error frown.
-Skin #4c32a8, window 800x480.
+Skin #4c32a8, window 800x480. Fullscreen on Raspberry Pi (or when PMO_FACE_FULLSCREEN=1).
 """
 import math
-import threading
+import os
+import sys
 import time
+import traceback
 
 # Skin color (user-specified)
 SKIN = (0x4c, 0x32, 0xa8)  # #4c32a8
@@ -15,11 +17,29 @@ MOUTH_TONGUE = (0x9c, 0xbc, 0x60)
 
 WIDTH, HEIGHT = 800, 480
 
-# Shared state (written from main thread, read in face thread)
+
+def _use_fullscreen() -> bool:
+    """True on Raspberry Pi (for kiosk/fullscreen), or when PMO_FACE_FULLSCREEN=1. False on dev PC."""
+    env = os.getenv("PMO_FACE_FULLSCREEN", "").strip().lower()
+    if env in ("1", "true", "yes"):
+        return True
+    if env in ("0", "false", "no"):
+        return False
+    if sys.platform != "linux":
+        return False
+    try:
+        with open("/proc/device-tree/model", "rb") as f:
+            return b"Raspberry" in f.read()
+    except Exception:
+        return False
+
+
+# Shared state (written from agent thread, read in face loop)
 _last_interaction_time = [time.time()]  # list so we can mutate from outside
 _error_until = [0.0]  # time.time() until when to show frown
 _running = False
-_thread = None
+_screen = None  # Created on main thread, used by run_face_loop()
+_face_ok = False  # True only if the display started successfully
 
 
 def record_interaction() -> None:
@@ -100,12 +120,14 @@ def _draw_face(
         pygame.draw.arc(screen, BLACK, mouth_rect, 3.14, 6.28, 6)
 
 
-def _face_loop() -> None:
+def _face_loop(screen: "pygame.Surface | None") -> None:
+    """Run the face draw loop. If screen is None, display failed."""
+    global _face_ok
     import pygame
-    pygame.init()
-    pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Assistant")
+    if screen is None:
+        _face_ok = False
+        return
+    _face_ok = True
     clock = pygame.time.Clock()
 
     blink_timer = 0.0
@@ -186,15 +208,62 @@ def _face_loop() -> None:
     pygame.quit()
 
 
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+
+
 def start_face() -> None:
-    """Start the face window in a background thread. Call once at startup."""
-    global _thread
-    if _thread is not None and _thread.is_alive():
+    """Create the face window on the current (main) thread. Call once at startup.
+    Then the caller must run run_face_loop() on the same thread so the window appears (required on Windows)."""
+    global _screen, _face_ok
+    _log("[Face] start_face() called.")
+    if _screen is not None:
+        _log("[Face] Window already exists, skipping.")
         return
     _last_interaction_time[0] = time.time()
-    _thread = threading.Thread(target=_face_loop, daemon=True)
-    _thread.start()
-    time.sleep(0.3)
+    try:
+        if sys.platform == "win32":
+            import os
+            os.environ.setdefault("SDL_VIDEODRIVER", "windows")
+            os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "100,100")
+        _log("[Face] Importing pygame and creating window...")
+        import pygame
+        pygame.init()
+        pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
+        flags = pygame.FULLSCREEN if _use_fullscreen() else 0
+        _screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        pygame.display.set_caption("Assistant")
+        pygame.display.flip()
+        if sys.platform == "win32":
+            try:
+                wm_info = pygame.display.get_wm_info()
+                hwnd = wm_info.get("window") or wm_info.get("hwnd")
+                if hwnd:
+                    import ctypes
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+        _face_ok = True
+        _log("[Face] Window created (800x480)." + (" Fullscreen." if _use_fullscreen() else ""))
+    except Exception as e:
+        print(f"[Face] Could not start display: {e}", flush=True)
+        traceback.print_exc()
+        print("[Face] On Pi: use a connected display, or set PMO_FACE=0. For framebuffer try: export SDL_VIDEODRIVER=kmsdrm", flush=True)
+        print("[Face] On Windows: run in a normal terminal (not WSL without GUI). Try: python scripts/test_face.py", flush=True)
+        _face_ok = False
+        _screen = None
+
+
+def run_face_loop() -> None:
+    """Run the face event/draw loop. Blocks until stop_face() is called. Must be called on the main thread (same thread that called start_face())."""
+    global _running
+    _running = True
+    if _screen is not None:
+        _log("[Face] Entering event loop.")
+        _face_loop(_screen)
+    else:
+        _log("[Face] No display; skipping event loop.")
+    _running = False
 
 
 def stop_face() -> None:

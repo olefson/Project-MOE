@@ -22,22 +22,27 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 # Built-in keyword fallback (say "Bumblebee" to wake PMO when no custom .ppn)
 WAKE_KEYWORD = "bumblebee"
 
-# Default custom wake word file name (place in Project-MOE/ or set PICOVOICE_KEYWORD_PATH)
-DEFAULT_PPN_NAME = "Hey-pee-moe_en_raspberry-pi_v4_0_0.ppn"
+# Default custom wake word file names (place in Project-MOE/ or set PICOVOICE_KEYWORD_PATH)
+# Picovoice .ppn files are platform-specific: use the Windows build on Windows, Pi on Linux.
+DEFAULT_PPN_NAME_LINUX = "Hey-pee-moe_en_raspberry-pi_v4_0_0.ppn"
+DEFAULT_PPN_NAME_WINDOWS = "Hey-pee-moe_en_windows_v4_0_0.ppn"
 
 
 def _get_keyword_path() -> Path | None:
-    """Resolve custom .ppn path from env or default file in project root. On non-Linux we only use env (Pi .ppn is platform-specific)."""
+    """Resolve custom .ppn path from env or default file in project root. Uses platform-specific default name if no env set."""
     env_path = os.getenv("PICOVOICE_KEYWORD_PATH", "").strip()
     if env_path:
         p = Path(env_path)
         if not p.is_absolute():
             p = _PROJECT_ROOT / p
         return p if p.exists() else None
-    # Default .ppn is for Raspberry Pi; only use on Linux so Windows/Mac keep using built-in Bumblebee
-    if sys.platform != "linux":
-        return None
-    default = _PROJECT_ROOT / DEFAULT_PPN_NAME
+    # Default .ppn by platform (must be trained for that platform in Picovoice Console)
+    if sys.platform == "linux":
+        default = _PROJECT_ROOT / DEFAULT_PPN_NAME_LINUX
+    elif sys.platform == "win32":
+        default = _PROJECT_ROOT / DEFAULT_PPN_NAME_WINDOWS
+    else:
+        default = _PROJECT_ROOT / DEFAULT_PPN_NAME_WINDOWS  # try Windows name on Mac too
     return default if default.exists() else None
 
 
@@ -67,13 +72,18 @@ def is_available(access_key: str | None = None) -> bool:
         return False
 
 
-def listen_for_wake_word(access_key: str, sensitivity: float = 0.5) -> bool:
+def listen_for_wake_word(
+    access_key: str,
+    sensitivity: float = 0.5,
+    tail_ms: int = 700,
+) -> tuple[bool, bytes]:
     """
-    Block until the wake word is detected. Returns True when heard (or False on error/cleanup).
-    Uses the same mic as voice_input (16 kHz mono 16-bit). Caller should then run record_until_silence().
+    Block until the wake word is detected. Returns (True, tail_audio) when heard, (False, b"") on error.
+    tail_audio is audio captured for tail_ms after the wake word (same format: 16 kHz mono 16-bit).
+    Pass tail_audio to record_until_silence(initial_audio=...) so the rest of the sentence is not lost.
     """
     if not _DEPS_AVAILABLE:
-        return False
+        return False, b""
     path = _get_keyword_path()
     try:
         if path is not None:
@@ -89,26 +99,39 @@ def listen_for_wake_word(access_key: str, sensitivity: float = 0.5) -> bool:
                 sensitivities=[sensitivity],
             )
     except Exception:
-        return False
+        return False, b""
 
     sample_rate = porcupine.sample_rate
     frame_length = porcupine.frame_length
     frame_bytes = frame_length * 2  # 16-bit
 
-    pa = pyaudio.PyAudio()
+    device_index = None
     try:
-        stream = pa.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=sample_rate,
-            input=True,
-            frames_per_buffer=frame_length,
-        )
+        s = os.getenv("PMO_MIC_DEVICE_INDEX", "").strip()
+        if s:
+            device_index = int(s)
+    except ValueError:
+        pass
+
+    pa = pyaudio.PyAudio()
+    open_kw = {
+        "format": pyaudio.paInt16,
+        "channels": 1,
+        "rate": sample_rate,
+        "input": True,
+        "frames_per_buffer": frame_length,
+    }
+    if device_index is not None:
+        open_kw["input_device_index"] = device_index
+    try:
+        stream = pa.open(**open_kw)
     except Exception:
         porcupine.delete()
         pa.terminate()
-        return False
+        return False, b""
 
+    detected = False
+    tail_frames: list[bytes] = []
     try:
         while True:
             try:
@@ -117,15 +140,20 @@ def listen_for_wake_word(access_key: str, sensitivity: float = 0.5) -> bool:
                 break
             if len(chunk) < frame_bytes:
                 break
-            # Porcupine expects list of int (16-bit PCM)
+            if detected:
+                tail_frames.append(chunk)
+                if len(tail_frames) * frame_bytes >= sample_rate * 2 * (tail_ms / 1000.0):
+                    break
+                continue
             pcm = list(struct.unpack_from(f"<{frame_length}h", chunk))
             keyword_index = porcupine.process(pcm)
             if keyword_index >= 0:
-                break
+                detected = True
     finally:
         stream.stop_stream()
         stream.close()
         pa.terminate()
         porcupine.delete()
 
-    return True
+    tail_audio = b"".join(tail_frames) if detected else b""
+    return detected, tail_audio
