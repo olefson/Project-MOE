@@ -4,3 +4,4 @@ __pycache__/
 voices/
 credentials.json
 token.json
+memory.db
