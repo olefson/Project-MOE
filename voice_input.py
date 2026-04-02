@@ -29,6 +29,8 @@ SAMPLE_RATE = 16000
 # webrtcvad expects 10, 20, or 30 ms frames at 8/16/32 kHz
 FRAME_MS = 20
 FRAME_BYTES = int(SAMPLE_RATE * FRAME_MS / 1000 * 2)  # 16-bit = 2 bytes per sample
+# PyAudio counts frames (samples per channel), not bytes
+FRAME_SAMPLES_16K = FRAME_BYTES // 2  # 20 ms @ 16 kHz mono
 
 # When mic only supports 48k (e.g. Pi USB), record at 48k and resample to 16k
 HW_RATE_48K = 48000
@@ -120,7 +122,7 @@ def record_until_silence(
         read_frames = FRAME_SAMPLES_48K
     else:
         rate = SAMPLE_RATE
-        read_frames = FRAME_BYTES  # 640 frames at 16k
+        read_frames = FRAME_SAMPLES_16K  # must be frame count for PyAudio + webrtcvad (20 ms)
 
     pa = pyaudio.PyAudio()
     device_index = _input_device_index()
