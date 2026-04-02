@@ -26,6 +26,7 @@ from tools.pi_control import (
     reboot_pi as pi_reboot_pi,
 )
 from tools.weather import get_weather as weather_get_weather
+from face import trigger_face_animation
 
 
 def add_calendar_event(title: str, when: str, description: str = "") -> str:
@@ -150,6 +151,14 @@ def set_mute(muted: bool) -> str:
 def reboot_pi(confirm: bool) -> str:
     """Reboot the Raspberry Pi. Only when user explicitly confirms and PMO_ALLOW_REBOOT=1."""
     return pi_reboot_pi(confirm=confirm)
+
+
+def play_face_animation(name: str) -> str:
+    """Trigger a face animation or expression (e.g. split, eye_drop, eye_pingpong)."""
+    try:
+        return trigger_face_animation(name=name)
+    except Exception as e:
+        return f"[ERROR] Face control not available: {e}"
 
 
 def _memory_client() -> OpenAI | None:
@@ -607,6 +616,26 @@ _TOOLS = {
                         "range_notation": {"type": "string", "description": "Optional A1 range (e.g. Sheet1!A1:D10)"},
                     },
                     "required": ["spreadsheet_id"],
+                },
+            },
+        },
+    },
+    "play_face_animation": {
+        "function": play_face_animation,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "play_face_animation",
+                "description": "Trigger a fun Pygame face animation on the PMO display (e.g. split face, dropping eye, ping-pong eye). Use when the user asks to 'do this face', 'do the split face', or similar visual gags.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Which animation to play: split, eye_drop, eye_pingpong, or a close synonym.",
+                        },
+                    },
+                    "required": ["name"],
                 },
             },
         },

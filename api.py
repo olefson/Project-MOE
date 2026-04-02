@@ -2,7 +2,6 @@
 MOE/PMO HTTP API – session-aware chat endpoint + voice (Whisper).
 Run: uvicorn api:app --reload --port 8000
 """
-import io
 import os
 import uuid
 from pathlib import Path
@@ -16,6 +15,7 @@ from pydantic import BaseModel, Field
 from main import SYSTEM_PROMPT, get_current_time_context, run_agent_turn
 from memory import init_db, get_relevant, format_context, extract_and_store_memories, store_memory
 from tools import get_tool_definitions
+from transcription import transcribe_upload
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -167,13 +167,9 @@ async def audio(
 
     session_id = session_id or str(uuid.uuid4())
 
-    # Whisper transcription
     try:
         client = OpenAI(api_key=api_key)
-        f = io.BytesIO(content)
-        f.name = file.filename or "audio.webm"
-        transcript_response = client.audio.transcriptions.create(model="whisper-1", file=f)
-        transcript = (transcript_response.text or "").strip()
+        transcript = transcribe_upload(client, content, file.filename)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}") from e
 

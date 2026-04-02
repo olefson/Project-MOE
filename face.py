@@ -4,6 +4,7 @@ Skin #4c32a8, window 800x480. Fullscreen on Raspberry Pi (or when PMO_FACE_FULLS
 """
 import math
 import os
+import random
 import sys
 import time
 import traceback
@@ -12,6 +13,7 @@ import traceback
 SKIN = (0x4c, 0x32, 0xa8)  # #4c32a8
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
+RED = (255, 0, 0)
 MOUTH_INNER = (0x38, 0x68, 0x3e)
 MOUTH_TONGUE = (0x9c, 0xbc, 0x60)
 
@@ -41,6 +43,13 @@ _running = False
 _screen = None  # Created on main thread, used by run_face_loop()
 _face_ok = False  # True only if the display started successfully
 
+# Explicit face state (used for future enhancements like "thinking", "listening").
+_face_state = ["idle"]  # idle, listening, thinking, speaking, error
+
+# Idle/triggered easter eggs: split, eye_drop, eye_pingpong
+_easter_mode = ["none"]
+_easter_started_at = [0.0]
+
 
 def record_interaction() -> None:
     """Call when user sends a message or assistant replies (resets idle timer)."""
@@ -50,6 +59,41 @@ def record_interaction() -> None:
 def show_error(duration_seconds: float = 2.0) -> None:
     """Show frown for the given duration. Call when an error occurs."""
     _error_until[0] = time.time() + duration_seconds
+    _face_state[0] = "error"
+
+
+def set_face_state(state: str) -> None:
+    """Set high-level face state (idle, listening, thinking, speaking, error)."""
+    if state not in ("idle", "listening", "thinking", "speaking", "error"):
+        return
+    _face_state[0] = state
+    if state != "error":
+        # Clear transient error timer when moving out of error state.
+        _error_until[0] = 0.0
+
+
+def trigger_face_animation(name: str, duration_seconds: float = 4.0) -> str:
+    """Trigger a one-shot face easter egg animation by name."""
+    if not _face_ok:
+        return "Face display is not active."
+    name = (name or "").strip().lower()
+    if name in ("split", "apart", "face_split", "move_apart"):
+        mode = "split"
+    elif name in ("eye_drop", "drop_eye", "eye falls", "eye_fall"):
+        mode = "eye_drop"
+    elif name in ("eye_pingpong", "pingpong", "bouncing_eye", "bounce_eye"):
+        mode = "eye_pingpong"
+    elif name in ("error", "x_eyes", "dead", "fail"):
+        # Let the normal error handler render X eyes.
+        show_error(duration_seconds)
+        return "Okay, switching to my error face for a moment."
+    else:
+        return "I do not recognize that face animation name."
+
+    _easter_mode[0] = mode
+    _easter_started_at[0] = time.time()
+    _last_interaction_time[0] = time.time()
+    return f"Okay, doing the {mode.replace('_', ' ')} face."
 
 
 def _draw_face(
@@ -59,6 +103,7 @@ def _draw_face(
     eyes_closed: bool,
     look_offset: float,
     frown: bool,
+    error_eyes: bool,
     drift_phase: float | None,
 ) -> None:
     """Draw the face with optional look offset and drift (face parts displaced)."""
@@ -90,7 +135,15 @@ def _draw_face(
     look = int(look_offset)
 
     # Eyes
-    if eyes_closed:
+    if error_eyes:
+        # Big red X eyes (error state)
+        for dx in (-eye_offset, eye_offset):
+            x = cx + dx + look
+            y = eye_y
+            size = eye_radius + 6
+            pygame.draw.line(screen, RED, (x - size, y - size), (x + size, y + size), 6)
+            pygame.draw.line(screen, RED, (x - size, y + size), (x + size, y - size), 6)
+    elif eyes_closed:
         for dx in (-eye_offset, eye_offset):
             x = cx + dx + look
             rect = pygame.Rect(x - 22, eye_y - 22, 44, 44)
@@ -136,8 +189,6 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
     look_phase = 0.0
     drift_phase = None
     drift_duration = 4.0
-    drift_elapsed = 0.0
-    long_idle_triggered = False
 
     global _running
     _running = True
@@ -180,19 +231,29 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
         else:
             look_offset = 0.0
 
-        # Long idle (55s): face splits apart way after look-around easter egg
+        # Idle easter eggs (face split, eye drop, eye ping-pong)
+        # Trigger after a long idle if no animation is currently running.
         drift_idle_delay = 55.0
-        if time_since_interaction > drift_idle_delay and drift_phase is None and not long_idle_triggered:
-            long_idle_triggered = True
-            drift_phase = 0.0
-            drift_elapsed = 0.0
-        if drift_phase is not None:
-            drift_elapsed += dt
-            drift_phase = min(1.0, drift_elapsed / drift_duration)
-            if drift_phase >= 1.0:
+        if (
+            not talking
+            and _easter_mode[0] == "none"
+            and time_since_interaction > drift_idle_delay
+        ):
+            choice = random.choice(["split", "eye_drop", "eye_pingpong"])
+            _easter_mode[0] = choice
+            _easter_started_at[0] = now
+
+        # Map current easter egg to drift/overlay parameters.
+        if _easter_mode[0] == "split":
+            elapsed = now - _easter_started_at[0]
+            if elapsed <= drift_duration:
+                drift_phase = min(1.0, elapsed / drift_duration)
+            else:
                 drift_phase = None
-                long_idle_triggered = False
+                _easter_mode[0] = "none"
                 _last_interaction_time[0] = time.time()
+        else:
+            drift_phase = None
 
         _draw_face(
             screen,
@@ -201,8 +262,15 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
             eyes_closed=eyes_closed,
             look_offset=look_offset,
             frown=show_frown,
+            error_eyes=show_frown,
             drift_phase=drift_phase,
         )
+
+        # Additional idle/triggered easter egg overlays.
+        if _easter_mode[0] == "eye_drop":
+            _draw_eye_drop_overlay(screen, now)
+        elif _easter_mode[0] == "eye_pingpong":
+            _draw_eye_pingpong_overlay(screen, now)
         pygame.display.flip()
         clock.tick(30)
     pygame.quit()
@@ -270,3 +338,61 @@ def stop_face() -> None:
     """Signal the face window to close."""
     global _running
     _running = False
+
+
+def _draw_eye_drop_overlay(screen: "pygame.Surface", now: float) -> None:
+    """Animate one eye dropping out of the frame."""
+    import pygame
+
+    duration = 3.0
+    elapsed = now - _easter_started_at[0]
+    if elapsed > duration:
+        _easter_mode[0] = "none"
+        _last_interaction_time[0] = time.time()
+        return
+
+    # Start from the right eye position and fall downward.
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    base_eye_y = int(HEIGHT * 0.38)
+    base_eye_offset = 120
+    eye_radius = 28
+
+    start_y = base_eye_y
+    end_y = HEIGHT + eye_radius * 2
+    progress = max(0.0, min(1.0, elapsed / duration))
+    y = int(start_y + (end_y - start_y) * progress)
+    x = cx + base_eye_offset
+
+    pygame.draw.circle(screen, BLACK, (x, y), eye_radius)
+
+
+def _draw_eye_pingpong_overlay(screen: "pygame.Surface", now: float) -> None:
+    """Animate one eye bouncing quickly around the window border."""
+    import pygame
+
+    duration = 4.0
+    elapsed = now - _easter_started_at[0]
+    if elapsed > duration:
+        _easter_mode[0] = "none"
+        _last_interaction_time[0] = time.time()
+        return
+
+    eye_radius = 24
+    speed = 600.0  # pixels per second along the border
+    perimeter = 2 * (WIDTH + HEIGHT)
+    dist = (elapsed * speed) % perimeter
+
+    if dist < WIDTH:
+        x = int(dist)
+        y = 0
+    elif dist < WIDTH + HEIGHT:
+        x = WIDTH
+        y = int(dist - WIDTH)
+    elif dist < WIDTH + HEIGHT + WIDTH:
+        x = int(WIDTH - (dist - (WIDTH + HEIGHT)))
+        y = HEIGHT
+    else:
+        x = 0
+        y = int(HEIGHT - (dist - (WIDTH + HEIGHT + WIDTH)))
+
+    pygame.draw.circle(screen, BLACK, (x, y), eye_radius)

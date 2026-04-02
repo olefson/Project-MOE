@@ -16,6 +16,7 @@ from .stubs import (
     reboot_pi,
     get_tool_definitions,
     run_tool,
+    play_face_animation,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "reboot_pi",
     "get_tool_definitions",
     "run_tool",
+    "play_face_animation",
 ]
