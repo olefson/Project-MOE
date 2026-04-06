@@ -22,7 +22,12 @@ from openai import OpenAI
 
 from memory import init_db, get_relevant, format_context, extract_and_store_memories
 from tools import get_tool_definitions, run_tool
-from tts import speak as tts_speak, is_available as tts_available
+from tts import (
+    speak as tts_speak,
+    is_available as tts_available,
+    synthesize_to_wav,
+    play_wav,
+)
 from face import (
     start_face as face_start,
     run_face_loop as face_run_loop,
@@ -113,10 +118,23 @@ def _run_agent_turn_sync(
             })
 
 
-def _drain_tts_queue(q: "queue.Queue[str | None]") -> None:
+def _drain_stream_tts_queues(
+    text_q: "queue.Queue[str | None]", wav_q: "queue.Queue[str | None]"
+) -> None:
+    """Drop pending sentences and WAV paths (unlink files); used before tool rounds / shutdown."""
     while True:
         try:
-            q.get_nowait()
+            text_q.get_nowait()
+        except queue.Empty:
+            break
+    while True:
+        try:
+            p = wav_q.get_nowait()
+            if p:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
         except queue.Empty:
             break
 
@@ -124,19 +142,32 @@ def _drain_tts_queue(q: "queue.Queue[str | None]") -> None:
 def _run_agent_turn_streaming(
     client: OpenAI, messages: list[dict], tools: list[dict]
 ) -> tuple[str, list[dict], list[dict], bool]:
-    """Streaming completions + sentence-chunk Piper TTS in a background worker (PMO_TTS_STREAM=1)."""
+    """Streaming completions + sentence TTS: synth N+1 while N plays (producer/consumer)."""
     tool_calls_made: list[dict] = []
-    tts_q: queue.Queue[str | None] = queue.Queue()
+    text_q: queue.Queue[str | None] = queue.Queue()
+    wav_q: queue.Queue[str | None] = queue.Queue()
 
-    def tts_worker() -> None:
+    def tts_producer() -> None:
         while True:
-            item = tts_q.get()
+            item = text_q.get()
             if item is None:
+                wav_q.put(None)
                 break
-            tts_speak(item)
+            path = synthesize_to_wav(item)
+            if path:
+                wav_q.put(path)
 
-    worker = threading.Thread(target=tts_worker, daemon=True)
-    worker.start()
+    def tts_consumer() -> None:
+        while True:
+            path = wav_q.get()
+            if path is None:
+                break
+            play_wav(path)
+
+    producer = threading.Thread(target=tts_producer, daemon=True)
+    consumer = threading.Thread(target=tts_consumer, daemon=True)
+    producer.start()
+    consumer.start()
     spoke_any = False
     try:
         while True:
@@ -161,7 +192,7 @@ def _run_agent_turn_streaming(
                 if delta.content:
                     content_parts.append(delta.content)
                     for sent in acc.feed(delta.content):
-                        tts_q.put(sent)
+                        text_q.put(sent)
                         spoke_any = True
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
@@ -180,7 +211,7 @@ def _run_agent_turn_streaming(
             tool_calls_list = [tool_calls_dict[i] for i in sorted(tool_calls_dict.keys())]
 
             if tool_calls_list:
-                _drain_tts_queue(tts_q)
+                _drain_stream_tts_queues(text_q, wav_q)
                 assistant_msg = {"role": "assistant", "content": content or None}
                 assistant_msg["tool_calls"] = [
                     {
@@ -209,18 +240,20 @@ def _run_agent_turn_streaming(
 
             rem = acc.flush_remainder()
             if rem:
-                tts_q.put(rem)
+                text_q.put(rem)
                 spoke_any = True
             assistant_msg = {"role": "assistant", "content": content or None}
             messages.append(assistant_msg)
-            tts_q.put(None)
-            worker.join(timeout=600)
+            text_q.put(None)
+            producer.join(timeout=600)
+            consumer.join(timeout=600)
             return (content or "").strip(), messages, tool_calls_made, spoke_any
     finally:
-        if worker.is_alive():
-            _drain_tts_queue(tts_q)
-            tts_q.put(None)
-            worker.join(timeout=5)
+        if producer.is_alive() or consumer.is_alive():
+            _drain_stream_tts_queues(text_q, wav_q)
+            text_q.put_nowait(None)
+            producer.join(timeout=5)
+            consumer.join(timeout=5)
 
 
 def agent_loop(
