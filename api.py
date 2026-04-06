@@ -130,7 +130,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     try:
         tools = get_tool_definitions()
-        reply, updated_messages, tool_calls_made = run_agent_turn(client, messages, tools)
+        reply, updated_messages, tool_calls_made, _ = run_agent_turn(client, messages, tools)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}") from e
 
@@ -195,7 +195,7 @@ async def audio(
 
     try:
         tools = get_tool_definitions()
-        reply, updated_messages, tool_calls_made = run_agent_turn(client, messages, tools)
+        reply, updated_messages, tool_calls_made, _ = run_agent_turn(client, messages, tools)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}") from e
 

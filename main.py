@@ -6,6 +6,7 @@ With PMO_VOICE_ONLY=1: mic always on; speak then pause to submit (no keyboard).
 """
 import json
 import os
+import queue
 import threading
 import time
 from datetime import datetime
@@ -33,6 +34,7 @@ from voice_input import record_until_silence, is_available as voice_input_availa
 from wake_word import is_available as wake_word_available, get_wake_phrase_display
 from voice_conversation import open_conversation, get_next_utterance, close_conversation
 from transcription import transcribe_wav_file
+from sentence_stream import SentenceAccumulator
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 init_db()
@@ -48,11 +50,33 @@ def get_current_time_context() -> str:
     return f"[Current date and time: {now.strftime('%A, %B %d, %Y, %I:%M %p %Z')}. Use this for relative times like 'tomorrow', 'in an hour', 'next Friday'.]"
 
 
-def run_agent_turn(client: OpenAI, messages: list[dict], tools: list[dict]) -> tuple[str, list[dict], list[dict]]:
+def _tts_stream_enabled() -> bool:
+    """Sentence-chunk streaming TTS: PMO_TTS_STREAM=1, Piper available, PMO_TTS not disabled."""
+    if os.getenv("PMO_TTS_STREAM", "0").strip().lower() not in ("1", "true", "yes"):
+        return False
+    if os.getenv("PMO_TTS", "1").strip().lower() in ("0", "false", "no"):
+        return False
+    if not tts_available():
+        return False
+    return True
+
+
+def run_agent_turn(
+    client: OpenAI, messages: list[dict], tools: list[dict]
+) -> tuple[str, list[dict], list[dict], bool]:
     """
-    One agent turn: send messages to the LLM; if it calls tools, run stubs and re-call until we get a final reply.
-    Returns (final_assistant_text, updated_messages, tool_calls_made).
+    One agent turn: send messages to the LLM; if it calls tools, run tools and re-call until a final reply.
+    Returns (final_assistant_text, updated_messages, tool_calls_made, tts_spoken_by_stream).
+    When tts_spoken_by_stream is True, the caller should not call tts_speak(full_reply) again.
     """
+    if _tts_stream_enabled():
+        return _run_agent_turn_streaming(client, messages, tools)
+    return _run_agent_turn_sync(client, messages, tools)
+
+
+def _run_agent_turn_sync(
+    client: OpenAI, messages: list[dict], tools: list[dict]
+) -> tuple[str, list[dict], list[dict], bool]:
     tool_calls_made: list[dict] = []
     while True:
         response = client.chat.completions.create(
@@ -72,7 +96,7 @@ def run_agent_turn(client: OpenAI, messages: list[dict], tools: list[dict]) -> t
         messages.append(assistant_msg)
 
         if not tool_calls:
-            return (msg.content or "").strip(), messages, tool_calls_made
+            return (msg.content or "").strip(), messages, tool_calls_made, False
 
         for tc in tool_calls:
             name = tc.function.name
@@ -87,6 +111,116 @@ def run_agent_turn(client: OpenAI, messages: list[dict], tools: list[dict]) -> t
                 "tool_call_id": tc.id,
                 "content": result,
             })
+
+
+def _drain_tts_queue(q: "queue.Queue[str | None]") -> None:
+    while True:
+        try:
+            q.get_nowait()
+        except queue.Empty:
+            break
+
+
+def _run_agent_turn_streaming(
+    client: OpenAI, messages: list[dict], tools: list[dict]
+) -> tuple[str, list[dict], list[dict], bool]:
+    """Streaming completions + sentence-chunk Piper TTS in a background worker (PMO_TTS_STREAM=1)."""
+    tool_calls_made: list[dict] = []
+    tts_q: queue.Queue[str | None] = queue.Queue()
+
+    def tts_worker() -> None:
+        while True:
+            item = tts_q.get()
+            if item is None:
+                break
+            tts_speak(item)
+
+    worker = threading.Thread(target=tts_worker, daemon=True)
+    worker.start()
+    spoke_any = False
+    try:
+        while True:
+            stream = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                stream=True,
+            )
+            acc = SentenceAccumulator()
+            content_parts: list[str] = []
+            tool_calls_dict: dict[int, dict] = {}
+
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                if delta is None:
+                    continue
+                if delta.content:
+                    content_parts.append(delta.content)
+                    for sent in acc.feed(delta.content):
+                        tts_q.put(sent)
+                        spoke_any = True
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_calls_dict:
+                            tool_calls_dict[idx] = {"id": "", "type": "function", "function": {"name": "", "arguments": ""}}
+                        if tc.id:
+                            tool_calls_dict[idx]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_dict[idx]["function"]["name"] += tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
+
+            content = "".join(content_parts)
+            tool_calls_list = [tool_calls_dict[i] for i in sorted(tool_calls_dict.keys())]
+
+            if tool_calls_list:
+                _drain_tts_queue(tts_q)
+                assistant_msg = {"role": "assistant", "content": content or None}
+                assistant_msg["tool_calls"] = [
+                    {
+                        "id": tc["id"],
+                        "type": "function",
+                        "function": {"name": tc["function"]["name"], "arguments": tc["function"]["arguments"]},
+                    }
+                    for tc in tool_calls_list
+                ]
+                messages.append(assistant_msg)
+
+                for tc in tool_calls_list:
+                    name = tc["function"]["name"]
+                    try:
+                        args = json.loads(tc["function"]["arguments"] or "{}")
+                    except json.JSONDecodeError:
+                        args = {}
+                    tool_calls_made.append({"name": name, "arguments": args})
+                    result = run_tool(name, args)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": result,
+                    })
+                continue
+
+            rem = acc.flush_remainder()
+            if rem:
+                tts_q.put(rem)
+                spoke_any = True
+            assistant_msg = {"role": "assistant", "content": content or None}
+            messages.append(assistant_msg)
+            tts_q.put(None)
+            worker.join(timeout=600)
+            return (content or "").strip(), messages, tool_calls_made, spoke_any
+    finally:
+        if worker.is_alive():
+            _drain_tts_queue(tts_q)
+            tts_q.put(None)
+            worker.join(timeout=5)
 
 
 def agent_loop(
@@ -150,7 +284,7 @@ def agent_loop(
                         else:
                             messages[0] = {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + time_block}
                         try:
-                            reply, messages, _ = run_agent_turn(client, messages, tools)
+                            reply, messages, _, spoke_stream = run_agent_turn(client, messages, tools)
                         except Exception as e:
                             face_show_error()
                             print(f"PMO: Oops, something went wrong: {e}\n")
@@ -161,7 +295,11 @@ def agent_loop(
                             pass
                         print(f"PMO: {reply}\n")
                         face_record_interaction()
-                        if reply and os.getenv("PMO_TTS", "1").strip().lower() not in ("0", "false", "no"):
+                        if (
+                            reply
+                            and os.getenv("PMO_TTS", "1").strip().lower() not in ("0", "false", "no")
+                            and not spoke_stream
+                        ):
                             try:
                                 tts_speak(reply)
                             except Exception:
@@ -212,7 +350,7 @@ def agent_loop(
             messages[0] = {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + time_block}
 
         try:
-            reply, messages, _ = run_agent_turn(client, messages, tools)
+            reply, messages, _, spoke_stream = run_agent_turn(client, messages, tools)
         except Exception as e:
             face_show_error()
             print(f"PMO: Oops, something went wrong: {e}\n")
@@ -223,7 +361,11 @@ def agent_loop(
             pass
         print(f"PMO: {reply}\n")
         face_record_interaction()
-        if reply and os.getenv("PMO_TTS", "1").strip().lower() not in ("0", "false", "no"):
+        if (
+            reply
+            and os.getenv("PMO_TTS", "1").strip().lower() not in ("0", "false", "no")
+            and not spoke_stream
+        ):
             try:
                 tts_speak(reply)
             except Exception:
