@@ -2,9 +2,11 @@
 Google Calendar API: create events. Uses token.json from scripts/auth_google.py.
 """
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import dateparser
 from dateutil import parser as dateutil_parser
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -30,24 +32,70 @@ def _ensure_tz(dt: datetime) -> datetime:
     return dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
 
 
+def _apply_default_time_if_midnight(start: datetime) -> datetime:
+    """If parsed time has no clock component, default to 9:00 local."""
+    if start.hour == 0 and start.minute == 0:
+        return start.replace(hour=9, minute=0, second=0, microsecond=0)
+    return start
+
+
+def _parse_relative_delta(text: str, now: datetime) -> tuple[datetime, datetime] | None:
+    """Handle simple relative phrases like 'in 2 hours'."""
+    m = re.fullmatch(
+        r"in\s+(\d+)\s*(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)",
+        text,
+    )
+    if not m:
+        return None
+    amount = int(m.group(1))
+    unit = m.group(2)
+    if unit.startswith(("minute", "min")):
+        start = now + timedelta(minutes=amount)
+    elif unit.startswith(("hour", "hr")):
+        start = now + timedelta(hours=amount)
+    else:
+        start = now + timedelta(days=amount)
+    return (start, start)
+
+
 def parse_when(when_str: str, default_duration_hours: float = 1.0) -> tuple[datetime, datetime] | None:
     """
     Parse natural language or ISO when into (start, end) in local time.
     Uses current date/time as reference so "tomorrow", "in an hour", "next Friday" resolve correctly.
     If only a date is given, start is 9:00 local and end is start + default_duration_hours.
     """
-    if not (when_str or when_str.strip()):
+    if not when_str or not when_str.strip():
         return None
     try:
         now = datetime.now().astimezone()
-        parsed = dateutil_parser.parse(when_str.strip(), default=now)
-        start = _ensure_tz(parsed)
-        # If no time was specified (midnight), assume 9:00
-        if start.hour == 0 and start.minute == 0:
-            start = start.replace(hour=9, minute=0, second=0, microsecond=0)
+
+        raw = when_str.strip()
+        text = raw.lower()
+
+        # Fast path for common relative expressions dateutil misses.
+        relative = _parse_relative_delta(text, now)
+        if relative:
+            start, _ = relative
+            end = start + timedelta(hours=default_duration_hours)
+            return (start, end)
+
+        # Broad natural-language parser.
+        parsed = dateparser.parse(
+            raw,
+            settings={
+                "RELATIVE_BASE": now.replace(tzinfo=None),
+                "PREFER_DATES_FROM": "future",
+                "RETURN_AS_TIMEZONE_AWARE": False,
+            },
+        )
+        if parsed is None:
+            # Final fallback for explicit timestamp-style strings.
+            parsed = dateutil_parser.parse(raw, default=now)
+
+        start = _apply_default_time_if_midnight(_ensure_tz(parsed))
         end = start + timedelta(hours=default_duration_hours)
         return (start, end)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return None
 
 
