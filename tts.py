@@ -1,12 +1,12 @@
 """
 Piper TTS – local, free. Voice: cori [high] (en_GB-cori-high).
-Run scripts/download_piper_voice.py once to download the voice.
+Keep voice files in Project-MOE/voices (archived downloader is in old_stuff).
 """
 import os
 import tempfile
 from pathlib import Path
 
-# Project root and voices dir
+# Project root + voice asset directory.
 ROOT = Path(__file__).resolve().parent
 VOICES_DIR = ROOT / "voices"
 VOICE_ID = "en_GB-cori-high"
@@ -14,7 +14,7 @@ VOICE_ONNX = VOICES_DIR / f"{VOICE_ID}.onnx"
 
 _voice = None
 
-# pygame.mixer (must match Piper WAV sample rate for this voice)
+# pygame mixer rate has to match this Piper voice WAV rate.
 _MIXER_FREQ = 22050
 _MIXER_BUFFER = 512
 

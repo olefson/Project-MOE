@@ -15,11 +15,12 @@ from pydantic import BaseModel, Field
 from main import SYSTEM_PROMPT, get_current_time_context, run_agent_turn
 from memory import init_db, get_relevant, format_context, extract_and_store_memories, store_memory
 from tools import get_tool_definitions
+from tools.api_onboarding import onboard_api_integration
 from transcription import transcribe_upload
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-# Ensure memory DB exists at startup
+# Make sure memory DB exists at startup.
 init_db()
 
 SESSION_SUMMARY_INTERVAL = 10  # Every N messages, store a session summary
@@ -34,7 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory session store: session_id -> list of messages (same shape as main.py)
+# In-memory session map is session_id -> message list (same shape as main.py).
 session_store: dict[str, list[dict]] = {}
 
 
@@ -48,7 +49,7 @@ def _run_session_summary(client, messages: list[dict]) -> None:
             pairs.append(("assistant", m["content"]))
     if len(pairs) < 2:
         return
-    # Last 10 messages (5 exchanges) or fewer
+    # Keep last 10 messages (about 5 exchanges), or fewer if session is short.
     recent = pairs[-10:] if len(pairs) >= 10 else pairs
     block = "\n".join(f"{r}: {c[:200]}" for r, c in recent)
     try:
@@ -99,6 +100,18 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
+class OnboardApiRequest(BaseModel):
+    provider: str = Field(..., min_length=1)
+    account_email: str | None = None
+    project_env_path: str | None = None
+    allow_full_secret_logs: bool = True
+    dry_run: bool = False
+
+
+class OnboardApiResponse(BaseModel):
+    report: str
+
+
 @app.post("/chat", response_model=ChatResponse, responses={500: {"model": ErrorResponse}, 503: {"model": ErrorResponse}})
 def chat(request: ChatRequest) -> ChatResponse:
     api_key = os.getenv("OPENAI_API_KEY")
@@ -110,7 +123,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     if not message:
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
-    # Load or create conversation
+    # Load existing conversation or create a fresh one.
     time_block = get_current_time_context()
     messages = session_store.get(session_id)
     if not messages:
@@ -176,7 +189,7 @@ async def audio(
     if not transcript:
         raise HTTPException(status_code=400, detail="No speech detected in audio")
 
-    # Same session/agent flow as /chat
+    # /audio follows the same session + agent flow as /chat.
     time_block = get_current_time_context()
     messages = session_store.get(session_id)
     if not messages:
@@ -211,3 +224,25 @@ async def audio(
             pass
     reasoning = {"memories": used_entries, "tool_calls": tool_calls_made}
     return AudioResponse(reply=reply, session_id=session_id, transcript=transcript, reasoning_used=reasoning)
+
+
+@app.post(
+    "/onboard-api",
+    response_model=OnboardApiResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+def onboard_api(request: OnboardApiRequest) -> OnboardApiResponse:
+    provider = request.provider.strip()
+    if not provider:
+        raise HTTPException(status_code=400, detail="provider cannot be empty")
+    try:
+        report = onboard_api_integration(
+            provider=provider,
+            account_email=(request.account_email or "").strip(),
+            project_env_path=(request.project_env_path or "").strip(),
+            allow_full_secret_logs=request.allow_full_secret_logs,
+            dry_run=request.dry_run,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Onboarding error: {str(e)}") from e
+    return OnboardApiResponse(report=report)

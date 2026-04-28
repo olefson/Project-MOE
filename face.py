@@ -9,7 +9,7 @@ import sys
 import time
 import traceback
 
-# Skin color (user-specified)
+# User-picked skin color.
 SKIN = (0x4c, 0x32, 0xa8)  # #4c32a8
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -36,17 +36,17 @@ def _use_fullscreen() -> bool:
         return False
 
 
-# Shared state (written from agent thread, read in face loop)
+# Shared state written by agent thread and read by face loop.
 _last_interaction_time = [time.time()]  # list so we can mutate from outside
 _error_until = [0.0]  # time.time() until when to show frown
 _running = False
 _screen = None  # Created on main thread, used by run_face_loop()
 _face_ok = False  # True only if the display started successfully
 
-# Explicit face state (used for future enhancements like "thinking", "listening").
+# Explicit face state for extra modes later ("thinking", "listening", etc.).
 _face_state = ["idle"]  # idle, listening, thinking, speaking, error
 
-# Idle/triggered easter eggs: split, eye_drop, eye_pingpong
+# Idle/triggered easter eggs are split, eye_drop, and eye_pingpong.
 _easter_mode = ["none"]
 _easter_started_at = [0.0]
 
@@ -68,7 +68,7 @@ def set_face_state(state: str) -> None:
         return
     _face_state[0] = state
     if state != "error":
-        # Clear transient error timer when moving out of error state.
+        # Clear transient error timer once I leave error mode.
         _error_until[0] = 0.0
 
 
@@ -84,7 +84,7 @@ def trigger_face_animation(name: str, duration_seconds: float = 4.0) -> str:
     elif name in ("eye_pingpong", "pingpong", "bouncing_eye", "bounce_eye"):
         mode = "eye_pingpong"
     elif name in ("error", "x_eyes", "dead", "fail"):
-        # Let the normal error handler render X eyes.
+        # Let the normal error renderer draw X eyes.
         show_error(duration_seconds)
         return "Okay, switching to my error face for a moment."
     else:
@@ -118,9 +118,9 @@ def _draw_face(
     mouth_width = 140
     mouth_height_open = 50
 
-    # Drift: displace eyes and mouth apart then back (0 -> 1 -> 0)
+    # Drift animation pushes features apart, then brings them back (0 -> 1 -> 0).
     if drift_phase is not None:
-        # 0 = normal, 0.5 = max drift, 1 = back
+        # 0 is normal, 0.5 is max drift, 1 is back to normal.
         drift = math.sin(drift_phase * math.pi) * 1.0
         eye_dx = int(80 * drift)   # eyes move apart
         mouth_dy = int(30 * drift) # mouth moves down
@@ -131,12 +131,12 @@ def _draw_face(
     eye_y = base_eye_y
     eye_offset = base_eye_offset + eye_dx
     mouth_y = base_mouth_y + mouth_dy
-    # Look side to side: shift both eyes together
+    # Side-look just shifts both eyes together.
     look = int(look_offset)
 
-    # Eyes
+    # Draw eyes.
     if error_eyes:
-        # Big red X eyes (error state)
+        # Giant red X eyes when things are broken.
         for dx in (-eye_offset, eye_offset):
             x = cx + dx + look
             y = eye_y
@@ -152,9 +152,9 @@ def _draw_face(
         for dx in (-eye_offset, eye_offset):
             pygame.draw.circle(screen, BLACK, (cx + dx + look, eye_y), eye_radius)
 
-    # Mouth
+    # Draw mouth.
     if frown:
-        # Downward arc (sad)
+        # Downward arc for sad mouth.
         mouth_rect = pygame.Rect(cx - mouth_width // 2, mouth_y - 30, mouth_width, 40)
         pygame.draw.arc(screen, BLACK, mouth_rect, 0, 3.14159, 6)
     elif talking and mouth_open:
@@ -168,7 +168,7 @@ def _draw_face(
         tongue_rect = pygame.Rect(mx_left + 20, mouth_y + mouth_height_open - 28, mouth_width - 40, 22)
         pygame.draw.ellipse(screen, MOUTH_TONGUE, tongue_rect)
     else:
-        # Closed smile
+        # Closed smile variant.
         mouth_rect = pygame.Rect(cx - mouth_width // 2, mouth_y - 10, mouth_width, 40)
         pygame.draw.arc(screen, BLACK, mouth_rect, 3.14, 6.28, 6)
 
@@ -205,7 +205,7 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
         talking = pygame.mixer.get_busy()
         show_frown = now < _error_until[0]
 
-        # Talk timer: close mouth briefly every 1.5s while talking
+        # While talking, close mouth briefly every 1.5s.
         if talking:
             talk_timer += dt
         else:
@@ -213,7 +213,7 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
         talk_cycle = talk_timer % 1.5
         mouth_open = talking and (talk_cycle > 0.15)
 
-        # Blink
+        # Blink timing.
         blink_timer += dt
         if 3.8 < blink_timer < 4.2:
             eyes_closed = True
@@ -221,7 +221,7 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
             eyes_closed = False
             blink_timer = 0.0
 
-        # Look side to side: starts after short idle, subtle and reactive
+        # Side-look starts after short idle and stays subtle/reactive.
         time_since_interaction = now - _last_interaction_time[0]
         look_delay = 2.5  # seconds before look starts (feels reactive)
         look_amount = 12   # pixels each way (subtle)
@@ -231,8 +231,8 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
         else:
             look_offset = 0.0
 
-        # Idle easter eggs (face split, eye drop, eye ping-pong)
-        # Trigger after a long idle if no animation is currently running.
+        # Idle easter eggs (face split, eye drop, eye ping-pong).
+        # Only trigger after long idle when no other animation is running.
         drift_idle_delay = 55.0
         if (
             not talking
@@ -243,7 +243,7 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
             _easter_mode[0] = choice
             _easter_started_at[0] = now
 
-        # Map current easter egg to drift/overlay parameters.
+        # Map active easter egg to drift/overlay params.
         if _easter_mode[0] == "split":
             elapsed = now - _easter_started_at[0]
             if elapsed <= drift_duration:
@@ -266,7 +266,7 @@ def _face_loop(screen: "pygame.Surface | None") -> None:
             drift_phase=drift_phase,
         )
 
-        # Additional idle/triggered easter egg overlays.
+        # Extra overlays for idle/triggered easter eggs.
         if _easter_mode[0] == "eye_drop":
             _draw_eye_drop_overlay(screen, now)
         elif _easter_mode[0] == "eye_pingpong":
@@ -317,7 +317,7 @@ def start_face() -> None:
         print(f"[Face] Could not start display: {e}", flush=True)
         traceback.print_exc()
         print("[Face] On Pi: use a connected display, or set PMO_FACE=0. For framebuffer try: export SDL_VIDEODRIVER=kmsdrm", flush=True)
-        print("[Face] On Windows: run in a normal terminal (not WSL without GUI). Try: python scripts/test_face.py", flush=True)
+        print("[Face] On Windows: run in a normal terminal (not WSL without GUI). Archived display smoke test: ../old_stuff/Project-MOE_archive/Project-MOE/scripts/test_face.py", flush=True)
         _face_ok = False
         _screen = None
 
@@ -351,7 +351,7 @@ def _draw_eye_drop_overlay(screen: "pygame.Surface", now: float) -> None:
         _last_interaction_time[0] = time.time()
         return
 
-    # Start from the right eye position and fall downward.
+    # Start at the right eye and drop down.
     cx, cy = WIDTH // 2, HEIGHT // 2
     base_eye_y = int(HEIGHT * 0.38)
     base_eye_offset = 120

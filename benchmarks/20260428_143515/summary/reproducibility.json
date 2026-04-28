@@ -1,0 +1,14 @@
+{
+  "timestamp": "20260428_143515",
+  "python_version": "3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "git_commit": "34efbe4754776c5ad8ddafb61e28e8f200953159",
+  "pmo_tts": "1",
+  "pmo_stt": "openai",
+  "audio_fixture": "C:\\Users\\jason\\Coding\\Agentic_AI\\Final_Project\\Tests\\Arcane.m4a",
+  "warmup_runs": 1,
+  "measured_runs": 15,
+  "inter_run_delay": 1.5,
+  "chat_text": "Tell me about the animated series Arcane, by RIOT",
+  "measurement_definition": "transcript_ready_to_audio_finished"
+}

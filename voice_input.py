@@ -26,15 +26,15 @@ except ImportError:
 _DEPS_AVAILABLE = _HAVE_PYAUDIO
 
 SAMPLE_RATE = 16000
-# webrtcvad expects 10, 20, or 30 ms frames at 8/16/32 kHz
+# webrtcvad only accepts 10/20/30 ms frames at 8/16/32 kHz.
 FRAME_MS = 20
 FRAME_BYTES = int(SAMPLE_RATE * FRAME_MS / 1000 * 2)  # 16-bit = 2 bytes per sample
-# PyAudio counts frames (samples per channel), not bytes
+# PyAudio frame counts are samples-per-channel, not bytes.
 FRAME_SAMPLES_16K = FRAME_BYTES // 2  # 20 ms @ 16 kHz mono
 
-# When mic only supports 48k (e.g. Pi USB), record at 48k and resample to 16k
+# If mic only does 48k (common on Pi USB), record 48k then resample to 16k.
 HW_RATE_48K = 48000
-# 40 ms at 48k = 1920 samples (same duration as 640 samples at 16k)
+# 40 ms at 48k is 1920 samples, same duration as 640 samples at 16k.
 FRAME_SAMPLES_48K = int(HW_RATE_48K * 40 / 1000)  # 1920
 
 
@@ -55,14 +55,14 @@ def _resample_to_16k(chunk_bytes: bytes, from_rate: int) -> bytes:
     try:
         from scipy.signal import resample_poly
     except ImportError:
-        # Fallback: decimate by 3 (take every 3rd sample); may alias but works for voice
+        # Fallback is simple /3 decimation; not perfect, but good enough for voice.
         n = len(chunk_bytes) // 2
         samples = struct.unpack_from(f"<{n}h", chunk_bytes)
         out = struct.pack(f"<{n // 3}h", *samples[::3])
         return out
     n = len(chunk_bytes) // 2
     samples = struct.unpack_from(f"<{n}h", chunk_bytes)
-    # 48k -> 16k: ratio 1/3
+    # 48k -> 16k is a 1/3 ratio.
     out = resample_poly(samples, 1, 3)
     out_int = [int(round(x)) for x in out]
     return struct.pack(f"<{len(out_int)}h", *out_int)
@@ -151,8 +151,8 @@ def record_until_silence(
     silence_frames_needed = silence_duration_ms // FRAME_MS
     frames_in_buffer = 0
 
-    # Prepend wake-word tail so "bumblebee, how's the weather" is fully captured.
-    # When we have tail, we're already mid-utterance: go straight to "speaking" and capture until silence.
+    # Prepend wake-word tail so "bumblebee, how's the weather" stays intact.
+    # If tail exists, we're already mid-utterance, so jump to "speaking" until silence.
     if initial_audio:
         n = len(initial_audio) // FRAME_BYTES
         for i in range(n):
@@ -181,9 +181,9 @@ def record_until_silence(
             if _HAVE_WEBRTCVAD:
                 is_speech = vad.is_speech(chunk, SAMPLE_RATE)  # type: ignore[union-attr]
             else:
-                # Simple RMS-based detector when webrtcvad is unavailable (e.g., Windows without build tools).
+                # RMS fallback detector when webrtcvad is unavailable (like Windows toolchain pain).
                 rms = _rms_16bit(chunk)
-                # Empirical threshold: treat as speech if above low noise floor.
+                # Empirical threshold = speech if we're above the low noise floor.
                 is_speech = rms > 400
 
             if state == "waiting":
@@ -192,7 +192,7 @@ def record_until_silence(
                     if speech_ms >= min_utterance_ms:
                         state = "speaking"
                     else:
-                        # keep waiting for enough speech to avoid false triggers
+                        # Keep waiting for enough speech so noise doesn't false-trigger.
                         pass
                 else:
                     speech_ms = max(0, speech_ms - chunk_ms)
@@ -202,7 +202,7 @@ def record_until_silence(
                 else:
                     silence_ms += chunk_ms
                     if silence_ms >= silence_duration_ms:
-                        # End of utterance
+                        # This is the utterance end.
                         break
 
             if total_ms >= max_duration_ms:
@@ -216,7 +216,7 @@ def record_until_silence(
     if state != "speaking" or frames_in_buffer < min_frames:
         return None
 
-    # Write WAV to temp file
+    # Write captured audio to a temp WAV.
     fd, path = tempfile.mkstemp(suffix=".wav")
     try:
         with os.fdopen(fd, "wb") as f:

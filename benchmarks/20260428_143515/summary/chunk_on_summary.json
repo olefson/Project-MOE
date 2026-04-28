@@ -1,0 +1,30 @@
+{
+  "mode": "chunk_on",
+  "audio": "C:\\Users\\jason\\Coding\\Agentic_AI\\Final_Project\\Tests\\Arcane.m4a",
+  "transcript_used": "Tell me about the animated series Arcane, by RIOT",
+  "warmup_runs": 1,
+  "measured_runs": 15,
+  "inter_run_delay": 1.5,
+  "measurement_definition": "transcript_ready_to_audio_finished",
+  "created_at": "2026-04-28T19:16:04.333313+00:00",
+  "endpoint_summaries": {
+    "audible_turn": {
+      "count_total": 15,
+      "count_success": 15,
+      "count_failure": 0,
+      "failure_rate": 0.0,
+      "warmup_count": 1,
+      "mean_ms": 63369.398713321425,
+      "p50_ms": 63492.20490001608,
+      "median_ms": 63492.20490001608,
+      "std_ms": 5964.812102302022,
+      "min_ms": 53868.63279994577,
+      "max_ms": 77122.69830005243,
+      "p90_ms": 69163.18335998803,
+      "p95_ms": 71837.00299002229,
+      "p99_ms": 76065.55923804641,
+      "ci95_low_ms": 60622.88852180665,
+      "ci95_high_ms": 66201.77291218075
+    }
+  }
+}

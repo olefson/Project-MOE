@@ -41,7 +41,7 @@ def _decode_body(payload: dict) -> str:
                     data = part["body"]["data"]
                     decoded = base64.urlsafe_b64decode(data.encode("ASCII"))
                     html = decoded.decode("utf-8", errors="replace")
-                    # Crude strip tags for LLM
+                    # Quick-and-dirty HTML tag strip for LLM-friendly text.
                     text = re.sub(r"<[^>]+>", " ", html)
                     text = re.sub(r"\s+", " ", text).strip()
                     if text:

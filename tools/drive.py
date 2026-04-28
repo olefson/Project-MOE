@@ -32,7 +32,7 @@ def list_files(
         if mime_type:
             q_parts.append(f"mimeType = '{mime_type}'")
         if query.strip():
-            # Escape single quotes for Drive query
+            # Escape single quotes so the Drive query doesn't explode.
             q_esc = query.strip().replace("'", "\\'")
             q_parts.append(f"fullText contains '{q_esc}'")
         q = " and ".join(q_parts)

@@ -32,7 +32,7 @@ def get_volume() -> str:
     code, out, err = _run(["amixer", "get", "Master"])
     if code != 0:
         return f"Could not get volume. Is ALSA available? {err or out}"
-    # e.g. "Mono: Playback 50 [50%]" or "Front Left: Playback 384 [60%]"
+    # Examples include "Mono: Playback 50 [50%]" or "Front Left: Playback 384 [60%]".
     m = re.search(r"\[(\d+)%\]", out)
     if m:
         return f"Volume is at {m.group(1)}%."
@@ -92,7 +92,7 @@ def reboot_pi(confirm: bool) -> str:
     if os.getenv("PMO_ALLOW_REBOOT", "").strip().lower() not in ("1", "true", "yes"):
         return "Reboot is disabled. Set PMO_ALLOW_REBOOT=1 in .env and ask the user to confirm again."
     code, out, err = _run(["sudo", "reboot"], capture=False)
-    # reboot often does not return; if it does, we might get permission denied
+    # Reboot usually never returns; if it does, it's often a permission issue.
     if code != 0:
         return f"Reboot failed (is sudo reboot allowed?): {err or out}"
     return "Rebooting now."

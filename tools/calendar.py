@@ -1,5 +1,5 @@
 """
-Google Calendar API: create events. Uses token.json from scripts/auth_google.py.
+Google Calendar API: create events. Uses token.json from Google OAuth setup.
 """
 import os
 import re
@@ -72,14 +72,14 @@ def parse_when(when_str: str, default_duration_hours: float = 1.0) -> tuple[date
         raw = when_str.strip()
         text = raw.lower()
 
-        # Fast path for common relative expressions dateutil misses.
+        # Quick path for common relative phrases dateutil sometimes misses.
         relative = _parse_relative_delta(text, now)
         if relative:
             start, _ = relative
             end = start + timedelta(hours=default_duration_hours)
             return (start, end)
 
-        # Broad natural-language parser.
+        # Broad natural-language parse attempt.
         parsed = dateparser.parse(
             raw,
             settings={
@@ -89,7 +89,7 @@ def parse_when(when_str: str, default_duration_hours: float = 1.0) -> tuple[date
             },
         )
         if parsed is None:
-            # Final fallback for explicit timestamp-style strings.
+            # Final backup for explicit timestamp-ish strings.
             parsed = dateutil_parser.parse(raw, default=now)
 
         start = _apply_default_time_if_midnight(_ensure_tz(parsed))

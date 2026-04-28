@@ -7,7 +7,7 @@ import urllib.request
 import json
 from pathlib import Path
 
-# Optional .env for default location
+# Optional .env load so default location works without extra setup.
 try:
     from dotenv import load_dotenv
     _root = Path(__file__).resolve().parent.parent
@@ -18,7 +18,7 @@ except Exception:
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_GEO = "https://geocoding-api.open-meteo.com/v1/search"
 
-# WMO weather codes -> short description for TTS
+# WMO weather codes mapped to short TTS-friendly descriptions.
 _WEATHER_DESC = {
     0: "clear",
     1: "mainly clear",
@@ -52,7 +52,7 @@ def _get_default_coords() -> tuple[float, float]:
             return float(lat_s), float(lon_s)
         except ValueError:
             pass
-    # Fallback: Tampa, Florida
+    # Fallback location is Tampa, Florida.
     return 27.9506, -82.4572
 
 

@@ -1,6 +1,6 @@
 """
 Shared Google OAuth credentials for Calendar, Gmail, Drive, Docs, Sheets.
-Uses token.json from scripts/auth_google.py.
+Uses token.json from your one-time Google OAuth setup.
 """
 import os
 from pathlib import Path
@@ -34,5 +34,5 @@ def get_credentials() -> Credentials | None:
 
 def not_signed_in_message(service_name: str = "Google") -> str:
     return (
-        f"I couldn't connect to {service_name}. Run 'python scripts/auth_google.py' once to sign in, then try again."
+        f"I couldn't connect to {service_name}. Run one OAuth sign-in to create token.json (archived helper: ../old_stuff/Project-MOE_archive/Project-MOE/scripts/auth_google.py), then try again."
     )

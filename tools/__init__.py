@@ -17,6 +17,7 @@ from .stubs import (
     get_tool_definitions,
     run_tool,
     play_face_animation,
+    onboard_api_integration,
 )
 
 __all__ = [
@@ -36,4 +37,5 @@ __all__ = [
     "get_tool_definitions",
     "run_tool",
     "play_face_animation",
+    "onboard_api_integration",
 ]

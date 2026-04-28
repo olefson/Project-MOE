@@ -26,6 +26,7 @@ from tools.pi_control import (
     reboot_pi as pi_reboot_pi,
 )
 from tools.weather import get_weather as weather_get_weather
+from tools.api_onboarding import onboard_api_integration as onboarding_run
 from face import trigger_face_animation
 
 
@@ -87,6 +88,23 @@ def get_weather(location: str = "") -> str:
 def send_notification(message: str) -> str:
     """Stub: send text notification. Real impl in Phase 5 (Telegram)."""
     return f"[STUB] Would send notification: “{message}”."
+
+
+def onboard_api_integration(
+    provider: str,
+    account_email: str = "",
+    project_env_path: str = "",
+    allow_full_secret_logs: bool = True,
+    dry_run: bool = False,
+) -> str:
+    """Run automated API onboarding: discover, sign up, fetch key, install in .env."""
+    return onboarding_run(
+        provider=provider,
+        account_email=account_email or "",
+        project_env_path=project_env_path or "",
+        allow_full_secret_logs=allow_full_secret_logs,
+        dry_run=dry_run,
+    )
 
 
 def set_lights(
@@ -202,7 +220,7 @@ def update_memory(description_or_id: str, new_content: str) -> str:
         return f"[ERROR] Failed to update: {e}"
 
 
-# Map tool names (as used by the LLM) to functions and their JSON schema for OpenAI.
+# Map LLM tool names to callables + JSON schema for OpenAI tool-calling.
 _TOOLS = {
     "add_calendar_event": {
         "function": add_calendar_event,
@@ -270,6 +288,27 @@ _TOOLS = {
                         "message": {"type": "string", "description": "Message to send"},
                     },
                     "required": ["message"],
+                },
+            },
+        },
+    },
+    "onboard_api_integration": {
+        "function": onboard_api_integration,
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "onboard_api_integration",
+                "description": "Autonomously onboard a provider API: discover developer pages, attempt signup automation, read verification/key emails, extract credentials, and install into project .env.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "provider": {"type": "string", "description": "Provider name, e.g. nanoleaf, resend, stripe"},
+                        "account_email": {"type": "string", "description": "Email to use for signup/account verification. Optional if PMO_API_ONBOARDING_EMAIL is set."},
+                        "project_env_path": {"type": "string", "description": "Optional path to .env file; defaults to Project-MOE/.env"},
+                        "allow_full_secret_logs": {"type": "boolean", "description": "When true, print installed secrets in full in logs/output."},
+                        "dry_run": {"type": "boolean", "description": "When true, run discovery/signup/email extraction without writing .env."},
+                    },
+                    "required": ["provider"],
                 },
             },
         },
@@ -662,7 +701,7 @@ def run_tool(name: str, arguments: dict) -> str:
                 color=arguments.get("color"),
                 brightness=arguments.get("brightness"),
             )
-        # Pass only arguments the stub expects; ignore extra keys from the LLM.
+        # Only forward args this stub expects; ignore extra keys from the LLM.
         return fn(**{k: v for k, v in arguments.items() if k in _TOOLS[name]["definition"]["function"]["parameters"].get("properties", {})})
     except TypeError as e:
         return f"[ERROR] Tool {name} bad args: {e}"

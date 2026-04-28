@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 
-# Sentence end: punctuation then space(s) or end of string. Avoid tiny fragments.
+# Sentence boundary is punctuation + spaces/end-of-string, and I skip tiny fragments.
 _MIN_SENTENCE_LEN = 4
 _SPLIT = re.compile(r"^(.+?[.!?])(\s+|$)(.*)$", re.DOTALL)
 

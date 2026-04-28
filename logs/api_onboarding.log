@@ -1,0 +1,114 @@
+[ac36a51bbb][PRECHECK] Precheck passed for provider=demo, email=me@example.com
+[ac36a51bbb][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[ac36a51bbb][SIGNUP] Browser status=ok; visited=1 urls
+[ac36a51bbb][VERIFY_EMAIL] No matching provider emails found in poll window.
+[ac36a51bbb][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[ac36a51bbb][OBTAIN_KEY] Dry run enabled; skipping install/validate.
+[b48a72fb52][PRECHECK] Precheck passed for provider=demo, email=me@example.com
+[b48a72fb52][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[b48a72fb52][SIGNUP] Browser status=ok; visited=1 urls
+[b48a72fb52][VERIFY_EMAIL] No matching provider emails found in poll window.
+[b48a72fb52][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[b48a72fb52][INSTALL] Installed 1 secret(s) to C:\Users\jason\AppData\Local\Temp\tmpvm1rzlye\.env
+[b48a72fb52][VALIDATE] Validation passed: installed secrets present in .env
+[114d7b49be][PRECHECK] Precheck passed for provider=demo, email=me@example.com
+[114d7b49be][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[114d7b49be][SIGNUP] Browser status=ok; visited=1 urls
+[114d7b49be][VERIFY_EMAIL] No matching provider emails found in poll window.
+[114d7b49be][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[114d7b49be][OBTAIN_KEY] Dry run enabled; skipping install/validate.
+[9b6240a7f5][PRECHECK] Precheck passed for provider=demo, email=me@example.com
+[9b6240a7f5][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[9b6240a7f5][SIGNUP] Browser status=ok; visited=1 urls
+[9b6240a7f5][VERIFY_EMAIL] No matching provider emails found in poll window.
+[9b6240a7f5][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[9b6240a7f5][INSTALL] Installed 1 secret(s) to C:\Users\jason\AppData\Local\Temp\tmpvdw4qt3t\.env
+[9b6240a7f5][VALIDATE] Validation passed: installed secrets present in .env
+[5588fcd3c9][PRECHECK] Precheck passed for provider=nanoleaf, email=jason+nanoleaf@example.com
+[5588fcd3c9][DISCOVER] Discovery docs_url=n/a signup_url=n/a notes=DuckDuckGo discovery
+[5588fcd3c9][DISCOVER] Stage failed at DISCOVER: Could not discover signup URL
+[57aab09c77][PRECHECK] Precheck passed for provider=nanoleaf, email=jason+nanoleaf@example.com
+[57aab09c77][DISCOVER] Discovery docs_url=n/a signup_url=n/a notes=DuckDuckGo discovery
+[57aab09c77][DISCOVER] Stage failed at DISCOVER: Could not discover signup URL
+[d53dc81587][PRECHECK] Precheck passed for provider=stripe, email=jason+stripe@example.com
+[d53dc81587][DISCOVER] Discovery docs_url=https://stripe.com/docs signup_url=https://stripe.com/signup notes=Heuristic URL discovery
+[d53dc81587][SIGNUP] Browser status=ok; visited=2 urls
+[d53dc81587][VERIFY_EMAIL] No matching provider emails found in poll window.
+[d53dc81587][OBTAIN_KEY] Stage failed at OBTAIN_KEY: No credential candidates found; manual follow-up required
+[3878c652e1][PRECHECK] Precheck passed for provider=stripe, email=jasonolefson@gmail.com
+[3878c652e1][DISCOVER] Discovery docs_url=https://stripe.com/docs signup_url=https://stripe.com/signup notes=Heuristic URL discovery
+[3878c652e1][SIGNUP] Browser status=ok; visited=2 urls
+[3878c652e1][VERIFY_EMAIL] No matching provider emails found in poll window.
+[3878c652e1][OBTAIN_KEY] Stage failed at OBTAIN_KEY: No credential candidates found; manual follow-up required
+[35efea5a74][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[35efea5a74][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[35efea5a74][SIGNUP] Browser status=ok; visited=1 urls
+[35efea5a74][VERIFY_EMAIL] No matching provider emails found in poll window.
+[35efea5a74][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[35efea5a74][OBTAIN_KEY] Dry run enabled; skipping install/validate.
+[06cc69bbe2][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[06cc69bbe2][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[06cc69bbe2][SIGNUP] Browser status=ok; visited=1 urls
+[06cc69bbe2][VERIFY_EMAIL] No matching provider emails found in poll window.
+[06cc69bbe2][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[06cc69bbe2][INSTALL] Installed 1 secret(s) to C:\Users\jason\AppData\Local\Temp\tmpx0x3f_mo\.env
+[06cc69bbe2][VALIDATE] Validation passed: installed secrets present in .env
+[8d6bf2d8fa][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[8d6bf2d8fa][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[8d6bf2d8fa][SIGNUP] Browser status=ok; visited=1 urls
+[8d6bf2d8fa][VERIFY_EMAIL] No matching provider emails found in poll window.
+[8d6bf2d8fa][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[8d6bf2d8fa][OBTAIN_KEY] Dry run enabled; skipping install/validate.
+[a6b63ade1f][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[a6b63ade1f][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[a6b63ade1f][SIGNUP] Browser status=ok; visited=1 urls
+[a6b63ade1f][VERIFY_EMAIL] No matching provider emails found in poll window.
+[a6b63ade1f][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[a6b63ade1f][INSTALL] Installed 1 secret(s) to C:\Users\jason\AppData\Local\Temp\tmpqmuxp08r\.env
+[a6b63ade1f][VALIDATE] Validation passed: installed secrets present in .env
+[a071b653b9][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[a071b653b9][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[a071b653b9][SIGNUP] Browser status=ok; visited=1 urls
+[a071b653b9][VERIFY_EMAIL] No matching provider emails found in poll window.
+[a071b653b9][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[a071b653b9][OBTAIN_KEY] Dry run enabled; skipping install/validate.
+[0b9e4ccf58][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[0b9e4ccf58][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[0b9e4ccf58][SIGNUP] Browser status=ok; visited=1 urls
+[0b9e4ccf58][VERIFY_EMAIL] No matching provider emails found in poll window.
+[0b9e4ccf58][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[0b9e4ccf58][INSTALL] Installed 1 secret(s) to C:\Users\jason\AppData\Local\Temp\tmpgoj8zo72\.env
+[0b9e4ccf58][VALIDATE] Validation passed: installed secrets present in .env
+[41a0ebd5ef][PRECHECK] Precheck passed for provider=twilio, email=jasonolefson@gmail.com, profile=twilio
+[41a0ebd5ef][DISCOVER] Discovery docs_url=https://www.twilio.com/docs signup_url=https://www.twilio.com/try-twilio notes=Twilio static profile discovery
+[41a0ebd5ef][SIGNUP] Browser status=manual_required; visited=2 urls
+[41a0ebd5ef][SIGNUP] Blocker: Phone verification required
+[41a0ebd5ef][SIGNUP] Blocker: Email verification required
+[41a0ebd5ef][VERIFY_EMAIL] No matching provider emails found in poll window.
+[41a0ebd5ef][OBTAIN_KEY] Stage failed at OBTAIN_KEY: No credential candidates found; manual follow-up required
+[a2f8f8a97c][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[a2f8f8a97c][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[a2f8f8a97c][SIGNUP] Browser status=ok; visited=1 urls
+[a2f8f8a97c][VERIFY_EMAIL] No matching provider emails found in poll window.
+[a2f8f8a97c][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[a2f8f8a97c][OBTAIN_KEY] Dry run enabled; skipping install/validate.
+[67c496bb7f][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[67c496bb7f][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[67c496bb7f][SIGNUP] Browser status=ok; visited=1 urls
+[67c496bb7f][VERIFY_EMAIL] No matching provider emails found in poll window.
+[67c496bb7f][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[67c496bb7f][INSTALL] Installed 1 secret(s) to C:\Users\jason\AppData\Local\Temp\tmpud4v6ew7\.env
+[67c496bb7f][VALIDATE] Validation passed: installed secrets present in .env
+[b637be41e0][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[b637be41e0][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[b637be41e0][SIGNUP] Browser status=ok; visited=1 urls
+[b637be41e0][VERIFY_EMAIL] No matching provider emails found in poll window.
+[b637be41e0][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[b637be41e0][OBTAIN_KEY] Dry run enabled; skipping install/validate.
+[a03d38aaf9][PRECHECK] Precheck passed for provider=demo, email=me@example.com, profile=fake
+[a03d38aaf9][DISCOVER] Discovery docs_url=https://demo.dev/docs signup_url=https://demo.dev/signup notes=test
+[a03d38aaf9][SIGNUP] Browser status=ok; visited=1 urls
+[a03d38aaf9][VERIFY_EMAIL] No matching provider emails found in poll window.
+[a03d38aaf9][OBTAIN_KEY] Top candidates: DEMO_API_KEY@0.95
+[a03d38aaf9][INSTALL] Installed 1 secret(s) to C:\Users\jason\AppData\Local\Temp\tmp0pz4b675\.env
+[a03d38aaf9][VALIDATE] Validation passed: installed secrets present in .env

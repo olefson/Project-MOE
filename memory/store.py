@@ -112,17 +112,17 @@ def get_relevant(
     if not rows:
         return []
 
-    # Try to embed query for similarity search
+    # Try embedding the query for similarity search first.
     try:
         query_vec = embed(client, query or " ") if query else [0.0] * EMBEDDING_DIMS
     except Exception:
-        # Fallback: return last N by recency (no embedding)
+        # Fallback is recency-only last N when embedding is unavailable.
         return [
             {"id": r[0], "content": r[1], "type": r[2], "source": r[3], "created_at": r[4]}
             for r in rows[:FALLBACK_LAST_N]
         ]
 
-    # Parse embeddings and compute similarity
+    # Parse stored embeddings and compute similarity scores.
     scored: list[tuple[float, dict]] = []
     for r in rows:
         row_id, content, type_, source, created_at, emb_json = r
@@ -163,7 +163,7 @@ def forget_memory(
 ) -> None:
     """Delete by id if numeric, else find closest by similarity and delete."""
     init_db(path)
-    # Try numeric id
+    # First try numeric id lookup.
     s = (description_or_id or "").strip()
     if s.isdigit():
         conn = _get_conn(path)
@@ -174,7 +174,7 @@ def forget_memory(
             conn.close()
         return
 
-    # Find by similarity
+    # Otherwise hunt by similarity.
     entries = get_relevant(client, s, top_k=1, path=path)
     if not entries:
         return
@@ -260,7 +260,7 @@ Facts (one per line, or NOTHING):"""
         line = line.strip()
         if not line or line.upper() == "NOTHING" or len(line) < 3:
             continue
-        # Remove leading bullets/dashes
+        # Strip leading bullets/dashes.
         if line.startswith("- ") or line.startswith("* "):
             line = line[2:].strip()
         try:

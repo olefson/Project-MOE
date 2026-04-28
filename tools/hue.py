@@ -2,7 +2,7 @@
 Philips Hue API v2 (local bridge). Control lights, rooms, and scenes.
 
 Requires: HUE_BRIDGE_IP, HUE_APP_KEY in environment.
-To create an app key: run scripts/setup_hue.py (press the bridge Link button when prompted).
+Create an app key with the archived setup helper in old_stuff (press the bridge Link button when prompted).
 
 Official getting started: https://developers.meethue.com/develop/hue-api-v2/getting-started/
 """
@@ -15,7 +15,7 @@ import ssl
 from pathlib import Path
 from typing import Any
 
-# Project root (parent of tools/) – load .env first so Hue works regardless of process cwd
+# Load .env from project root so Hue still works no matter where I launch from.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 try:
     from dotenv import load_dotenv
@@ -23,7 +23,7 @@ try:
 except Exception:
     pass
 
-# Optional: disable TLS verify for bridges with self-signed certs (local network only)
+# I can disable TLS verify for self-signed bridge certs on local network.
 HUE_VERIFY_SSL = os.getenv("HUE_VERIFY_SSL", "true").lower() in ("1", "true", "yes")
 
 
@@ -101,11 +101,11 @@ def _put(path: str, body: dict, base_url: str, app_key: str) -> list[dict]:
 def not_configured_message() -> str:
     return (
         "Philips Hue is not configured. Set HUE_BRIDGE_IP and HUE_APP_KEY in .env, "
-        "then run scripts/setup_hue.py (press the Link button on the bridge when prompted)."
+        "then use the archived setup helper in ../old_stuff/Project-MOE_archive/Project-MOE/scripts/setup_hue.py (press the Link button on the bridge when prompted)."
     )
 
 
-# --- Public API ---
+# --- Stuff the agent can call directly ---
 
 
 def list_lights() -> str:
@@ -143,7 +143,7 @@ def list_rooms() -> str:
     try:
         rooms = _get("/clip/v2/resource/room", base_url, app_key)
         grouped = _get("/clip/v2/resource/grouped_light", base_url, app_key)
-        # grouped_light has owner.rid = room id; room has services with rid = grouped_light id
+        # grouped_light owner.rid points at room id, and room.services.rid points back.
         rid_to_group = {g["id"]: g for g in grouped if g.get("owner", {}).get("rtype") == "room"}
         room_id_to_group_id = {}
         for g in grouped:
@@ -260,7 +260,7 @@ def activate_scene(scene_id: str) -> str:
         return f"[ERROR] Hue: {e}"
 
 
-# Named colors in CIE xy (approximate)
+# Rough named colors in CIE xy.
 COLORS: dict[str, tuple[float, float]] = {
     "red": (0.7, 0.3),
     "orange": (0.6, 0.4),
@@ -299,7 +299,7 @@ def set_lights(
     action = (action or "").strip().lower()
 
     try:
-        # Scene by name: list scenes, find match, activate
+        # Try the scene-name path first (list, match, activate).
         if action in ("scene", "mood", "cozy", "bright", "relax", "focus", "read", "energize"):
             scenes = _get("/clip/v2/resource/scene", base_url, app_key)
             name_to_id: dict[str, str] = {}
@@ -308,7 +308,7 @@ def set_lights(
                 n = (meta.get("name") or "").strip()
                 if n:
                     name_to_id[n.lower()] = s["id"]
-            # Map common words to possible scene names
+            # Translate everyday words into likely scene names.
             scene_lookup = scene_name or action
             scene_id = None
             for key, sid in name_to_id.items():
@@ -325,10 +325,10 @@ def set_lights(
                     app_key,
                 )
                 return f"Activated scene '{scene_lookup or action}'."
-            # Fallback: no scene found, try on + brightness/color
+            # If no scene matches, fall back to on + brightness/color.
             action = "on"
 
-        # On/off by room or all
+        # Handle on/off for either one room or the whole place.
         if action in ("on", "off"):
             on_val = action == "on"
             body: dict[str, Any] = {"type": "grouped_light", "on": {"on": on_val}}
@@ -352,19 +352,19 @@ def set_lights(
                 if group_id:
                     _put(f"/clip/v2/resource/grouped_light/{group_id}", body, base_url, app_key)
                     return f"Turned {action} in {room_name}."
-            # All: use bridge_home grouped_light if available
+            # For "all", prefer bridge_home grouped_light when available.
             grouped = _get("/clip/v2/resource/grouped_light", base_url, app_key)
             bridge_home = next((g for g in grouped if (g.get("owner") or {}).get("rtype") == "bridge_home"), None)
             if bridge_home:
                 _put(f"/clip/v2/resource/grouped_light/{bridge_home['id']}", body, base_url, app_key)
                 return f"Turned {action} all lights."
-            # Fallback: first grouped_light
+            # Backup plan is first grouped_light.
             if grouped:
                 _put(f"/clip/v2/resource/grouped_light/{grouped[0]['id']}", body, base_url, app_key)
                 return f"Turned {action} lights."
             return "No grouped lights found to turn on/off."
 
-        # Color only (by room or all)
+        # Color-only updates can target room or all lights.
         if action == "color" and color and color.lower() in COLORS:
             xy = COLORS[color.lower()]
             body = {"type": "grouped_light", "on": {"on": True}, "color": {"xy": {"x": xy[0], "y": xy[1]}}}

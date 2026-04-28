@@ -13,3 +13,4 @@ pyaudio
 webrtcvad
 pvporcupine
 scipy
+playwright

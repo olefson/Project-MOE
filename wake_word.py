@@ -16,14 +16,14 @@ try:
 except ImportError:
     _DEPS_AVAILABLE = False
 
-# Project root (where main.py and optional .ppn live)
+# Project root is where main.py and optional .ppn files live.
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
-# Built-in keyword fallback (say "Bumblebee" to wake PMO when no custom .ppn)
+# Built-in fallback keyword is "Bumblebee" when no custom .ppn is set.
 WAKE_KEYWORD = "bumblebee"
 
-# Default custom wake word file names (place in Project-MOE/ or set PICOVOICE_KEYWORD_PATH)
-# Picovoice .ppn files are platform-specific: use the Windows build on Windows, Pi on Linux.
+# Default custom wake-word filenames go in Project-MOE/ unless PICOVOICE_KEYWORD_PATH is set.
+# Picovoice .ppn files are platform-specific, so I need the right build for each OS.
 DEFAULT_PPN_NAME_LINUX = "Hey-pee-moe_en_raspberry-pi_v4_0_0.ppn"
 DEFAULT_PPN_NAME_WINDOWS = "Hey-pee-moe_en_windows_v4_0_0.ppn"
 
@@ -36,7 +36,7 @@ def _get_keyword_path() -> Path | None:
         if not p.is_absolute():
             p = _PROJECT_ROOT / p
         return p if p.exists() else None
-    # Default .ppn by platform (must be trained for that platform in Picovoice Console)
+    # Choose default .ppn by platform (trained for that platform in Picovoice Console).
     if sys.platform == "linux":
         default = _PROJECT_ROOT / DEFAULT_PPN_NAME_LINUX
     elif sys.platform == "win32":

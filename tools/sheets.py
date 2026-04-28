@@ -44,7 +44,7 @@ def get_sheet_data(spreadsheet_id: str, range_notation: str = "") -> str:
         values = result.get("values") or []
         if not values:
             return "Sheet is empty or range has no data."
-        # Format as readable text (tab-separated rows, one per line)
+        # Format as readable text (tab-separated rows, one per line).
         lines = []
         for row in values:
             lines.append("\t".join(str(c) for c in row))

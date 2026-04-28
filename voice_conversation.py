@@ -48,12 +48,12 @@ except ImportError:
 
 _DEPS_AVAILABLE = _HAVE_PV and _HAVE_PYAUDIO
 
-# VAD/recording params (same as voice_input)
+# VAD/recording params stay aligned with voice_input.
 SILENCE_DURATION_MS = 1200
 MIN_UTTERANCE_MS = 300  # lower = lock in to "speaking" sooner, fewer false "no speech"
 MAX_DURATION_MS = 15000
 VAD_AGGRESSIVENESS = 1  # 0=least aggressive, 3=most; lower = more sensitive to speech
-# webrtcvad only accepts 10, 20, or 30 ms; we read 40ms chunks so use 20ms sub-frames
+# webrtcvad wants 10/20/30 ms; since I read 40 ms chunks, I split into 20 ms sub-frames.
 VAD_FRAME_BYTES = 640  # 20 ms at 16 kHz 16-bit
 
 
@@ -94,7 +94,7 @@ def open_conversation(access_key: str) -> "ConversationSession | None":
 
     hw_rate = get_mic_sample_rate()
     if hw_rate != SAMPLE_RATE:
-        # Record at 48k and resample to 16k for Porcupine/Whisper (e.g. Pi USB mics)
+        # Record at 48k then resample to 16k for Porcupine/Whisper (Pi USB mic reality).
         rate = hw_rate
         frames_per_buffer = FRAME_SAMPLES_48K  # 1920 = 40 ms at 48k
     else:
@@ -157,7 +157,7 @@ def get_next_utterance(session: "ConversationSession") -> str | None:
     stream = session.stream
     porcupine = session.porcupine
     frame_length = session.frame_length
-    # PyAudio read(num_frames): at 16k we read 640 frames (1280 B); at 48k we read 1920 frames (3840 B) then resample to 1280 B.
+    # PyAudio read(num_frames) math: 16k->640 frames (1280 B), 48k->1920 frames (3840 B), then resample back to 1280 B.
     read_frames = FRAME_SAMPLES_48K if session.hw_sample_rate == HW_RATE_48K else FRAME_BYTES
     porcupine_buffer: list[int] = []
 
@@ -183,7 +183,7 @@ def get_next_utterance(session: "ConversationSession") -> str | None:
             total_ms += (len(chunk) // 2) * 1000 // SAMPLE_RATE
 
             if not session.wake_done:
-                # Feed Porcupine (needs frame_length samples); use full chunk (all samples we read)
+                # Feed Porcupine exactly what it wants (frame_length samples), using full chunk.
                 num_samples = len(chunk) // 2
                 pcm = list(struct.unpack_from(f"<{num_samples}h", chunk))
                 porcupine_buffer.extend(pcm)
@@ -193,7 +193,7 @@ def get_next_utterance(session: "ConversationSession") -> str | None:
                     idx = porcupine.process(feed)
                     if idx >= 0:
                         session.wake_done = True
-                        # Prepend any leftover to recording so we don't lose "how is the weather"
+                        # Prepend leftovers so I don't chop off "how is the weather".
                         if porcupine_buffer:
                             leftover = struct.pack(
                                 f"<{len(porcupine_buffer)}h",
@@ -204,17 +204,17 @@ def get_next_utterance(session: "ConversationSession") -> str | None:
                         break
                 if not session.wake_done:
                     continue
-                # Wake just detected: add this chunk and keep reading until silence
+                # Wake just fired, so keep this chunk and continue until silence.
                 buffer.append(chunk)
                 state = "speaking"
                 silence_ms = 0
                 continue
 
-            # Conversation mode: VAD or RMS-based detector only
+            # In conversation mode I only rely on VAD (or RMS fallback).
             buffer.append(chunk)
             chunk_ms = (len(chunk) // 2) * 1000 // SAMPLE_RATE
             if _HAVE_WEBRTCVAD:
-                # webrtcvad requires 10/20/30 ms frames; chunk is 40ms so use 20ms sub-frames
+                # Split 40 ms chunk into 20 ms sub-frames for webrtcvad compatibility.
                 is_speech = any(
                     vad.is_speech(chunk[i : i + VAD_FRAME_BYTES], SAMPLE_RATE)  # type: ignore[union-attr]
                     for i in range(0, len(chunk), VAD_FRAME_BYTES)
